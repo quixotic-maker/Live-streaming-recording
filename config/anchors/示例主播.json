@@ -1,0 +1,53 @@
+{
+  "主播名称": "示例主播",
+  "说明": "这是一个示例配置文件，请根据实际主播特点修改",
+  
+  "trigger_keywords": [
+    "哈哈哈",
+    "笑死",
+    "我的天",
+    "卧槽",
+    "太好笑了",
+    "可爱",
+    "萌",
+    "宝宝",
+    "老铁",
+    "家人们",
+    "绝了",
+    "牛逼",
+    "666",
+    "哇塞"
+  ],
+  
+  "high_density_duration": 1200,
+  "说明_high_density_duration": "开播初期高频期时长(秒)，通常前20分钟(1200秒)表情包最多",
+  
+  "time_decay_factor": 0.5,
+  "说明_time_decay_factor": "时间衰减因子，0-1之间，越小衰减越快",
+  
+  "gift_patterns": {
+    "说明": "礼物特效的识别模式",
+    "enable": true,
+    "weight": 5.0
+  },
+  
+  "emotion_weights": {
+    "说明": "不同表情的权重",
+    "happy": 5,
+    "surprise": 4,
+    "fear": 3,
+    "sad": 2
+  },
+  
+  "custom_rules": [
+    {
+      "说明": "自定义规则示例",
+      "type": "keyword_combo",
+      "keywords": ["哈哈哈", "笑死"],
+      "within_seconds": 5,
+      "weight_multiplier": 2.0,
+      "description": "5秒内同时出现多个笑声关键词，权重翻倍"
+    }
+  ]
+}
+

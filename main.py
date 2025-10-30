@@ -31,6 +31,7 @@ from src import spider, stream
 from src.proxy import ProxyDetector
 from src.utils import logger
 from src import utils
+from src.video_merger import merge_by_session
 from msg_push import (
     dingtalk, xizhi, tg_bot, send_email, bark, ntfy, pushplus
 )
@@ -99,6 +100,10 @@ def display_info() -> None:
             print(f"\r共监测{monitoring}个直播中", end=" | ")
             print(f"同一时间访问网络的线程数: {max_request}", end=" | ")
             print(f"是否开启代理录制: {'是' if use_proxy else '否'}", end=" | ")
+            if enable_time_window:
+                in_window = is_in_time_window(time_window_start, time_window_end)
+                window_status = "窗口内" if in_window else "窗口外"
+                print(f"时间窗口监测: 开启({time_window_start}-{time_window_end}) [{window_status}]", end=" | ")
             if split_video_by_time:
                 print(f"录制分段开启: {split_time}秒", end=" | ")
             else:
@@ -295,6 +300,54 @@ def generate_subtitles(record_name: str, ass_filename: str, sub_format: str = 's
         re_datatime = today.strftime('%Y-%m-%d %H:%M:%S')
 
 
+def is_in_time_window(start_time_str: str, end_time_str: str) -> bool:
+    """
+    判断当前时间是否在指定的时间窗口内
+    :param start_time_str: 开始时间，格式 "HH:MM"
+    :param end_time_str: 结束时间，格式 "HH:MM"
+    :return: True表示在时间窗口内，False表示不在
+    """
+    try:
+        now = datetime.datetime.now()
+        current_time = now.time()
+        
+        start_time = datetime.datetime.strptime(start_time_str, "%H:%M").time()
+        end_time = datetime.datetime.strptime(end_time_str, "%H:%M").time()
+        
+        # 处理跨天的情况（如 22:00-02:00）
+        if start_time <= end_time:
+            return start_time <= current_time <= end_time
+        else:
+            return current_time >= start_time or current_time <= end_time
+    except Exception as e:
+        logger.error(f"时间窗口判断错误: {e}")
+        return True  # 出错时默认返回True，保证正常运行
+
+
+def get_seconds_until_time_window(start_time_str: str) -> int:
+    """
+    计算距离下一个时间窗口开始还有多少秒
+    :param start_time_str: 开始时间，格式 "HH:MM"
+    :return: 秒数
+    """
+    try:
+        now = datetime.datetime.now()
+        start_time = datetime.datetime.strptime(start_time_str, "%H:%M").time()
+        
+        # 构造今天的开始时间
+        today_start = datetime.datetime.combine(now.date(), start_time)
+        
+        # 如果今天的开始时间已过，则计算明天的
+        if now.time() > start_time:
+            today_start += datetime.timedelta(days=1)
+        
+        seconds = int((today_start - now).total_seconds())
+        return max(seconds, 0)
+    except Exception as e:
+        logger.error(f"计算时间窗口等待时间错误: {e}")
+        return 3600  # 出错时默认等待1小时
+
+
 def adjust_max_request() -> None:
     global max_request, error_count, pre_max_request, error_window
     preset = max_request
@@ -451,14 +504,52 @@ def check_subprocess(record_name: str, record_url: str, ffmpeg_command: list, sa
     return_code = process.returncode
     stop_time = time.strftime('%Y-%m-%d %H:%M:%S')
     if return_code == 0:
+        # 自动合并分段视频（在转换MP4之前）
+        merged_file_path = save_file_path  # 默认使用原路径
+        if auto_merge_segments and split_video_by_time and save_type == 'TS':
+            try:
+                logger.info(f"{record_name} 开始合并分段视频...")
+                
+                # 提取基本信息用于合并
+                file_dir = os.path.dirname(save_file_path)
+                file_name = os.path.basename(save_file_path)
+                
+                # 文件名格式：主播名_日期时间_001.ts
+                # 提取主播名和开始时间
+                name_parts = file_name.rsplit('_', maxsplit=1)[0]  # 移除_001部分
+                
+                # 调用合并函数
+                merged_path = merge_by_session(
+                    file_dir,
+                    record_name.split(' ', maxsplit=1)[-1],  # 提取主播名
+                    name_parts.split('_', maxsplit=1)[-1],  # 提取时间戳部分
+                    delete_source=delete_segments_after_merge
+                )
+                
+                if merged_path:
+                    logger.info(f"✅ {record_name} 分段视频合并成功: {os.path.basename(merged_path)}")
+                    merged_file_path = merged_path  # 更新为合并后的文件路径
+                    color_obj.print_colored(f"📦 {record_name} 已合并 {os.path.basename(merged_path)}", 
+                                          color_obj.GREEN)
+                else:
+                    logger.warning(f"{record_name} 分段视频合并失败，将保留原分段文件")
+            except Exception as e:
+                logger.error(f"{record_name} 合并分段视频时发生错误: {e}")
+        
+        # 转换MP4（如果设置了）
         if converts_to_mp4 and save_type == 'TS':
-            if split_video_by_time:
+            if auto_merge_segments and split_video_by_time and merged_file_path != save_file_path:
+                # 如果已经合并，只转换合并后的文件
+                threading.Thread(target=converts_mp4, args=(merged_file_path, delete_origin_file)).start()
+            elif split_video_by_time and not auto_merge_segments:
+                # 如果没有合并，转换所有分段
                 file_paths = utils.get_file_paths(os.path.dirname(save_file_path))
                 prefix = os.path.basename(save_file_path).rsplit('_', maxsplit=1)[0]
                 for path in file_paths:
                     if prefix in path:
                         threading.Thread(target=converts_mp4, args=(path, delete_origin_file)).start()
             else:
+                # 单文件转换
                 threading.Thread(target=converts_mp4, args=(save_file_path, delete_origin_file)).start()
         print(f"\n{record_name} {stop_time} 直播录制完成\n")
 
@@ -1609,7 +1700,25 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                         error_count += 1
                         error_window.append(1)
 
-                num = random.randint(-5, 5) + delay_default
+                # 时间窗口监测逻辑
+                if enable_time_window:
+                    if is_in_time_window(time_window_start, time_window_end):
+                        # 在时间窗口内，使用短轮询间隔
+                        num = random.randint(-5, 5) + time_window_interval
+                    else:
+                        # 不在时间窗口内，计算距离下一个窗口的时间
+                        wait_seconds = get_seconds_until_time_window(time_window_start)
+                        if wait_seconds > 60:
+                            # 如果等待时间超过60秒，显示提示信息
+                            wait_hours = wait_seconds // 3600
+                            wait_minutes = (wait_seconds % 3600) // 60
+                            logger.info(f"{anchor_name} 当前不在监测时间窗口内({time_window_start}-{time_window_end})，"
+                                      f"距离下一次监测还有 {wait_hours}小时{wait_minutes}分钟")
+                        num = wait_seconds
+                else:
+                    # 未启用时间窗口，使用默认轮询间隔
+                    num = random.randint(-5, 5) + delay_default
+                
                 if num < 0:
                     num = 0
                 x = num
@@ -1632,10 +1741,17 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                 # 这里是正常循环
                 while x:
                     x = x - 1
-                    if loop_time:
-                        print(f'\r{anchor_name}循环等待{x}秒 ', end="")
+                    if loop_time or (enable_time_window and x > 300):
+                        # 时间窗口外等待时显示剩余时间
+                        if enable_time_window and not is_in_time_window(time_window_start, time_window_end):
+                            hours = x // 3600
+                            minutes = (x % 3600) // 60
+                            seconds = x % 60
+                            print(f'\r{anchor_name} 等待监测窗口 {hours:02d}:{minutes:02d}:{seconds:02d} ', end="")
+                        elif loop_time:
+                            print(f'\r{anchor_name}循环等待{x}秒 ', end="")
                     time.sleep(1)
-                if loop_time:
+                if loop_time or enable_time_window:
                     print('\r检测直播间中...', end="")
         except Exception as e:
             logger.error(f"错误信息: {e} 发生错误的行数: {e.__traceback__.tb_lineno}")
@@ -1814,6 +1930,10 @@ while True:
     semaphore = threading.Semaphore(max_request)
     delay_default = int(read_config_value(config, '录制设置', '循环时间(秒)', 120))
     local_delay_default = int(read_config_value(config, '录制设置', '排队读取网址时间(秒)', 0))
+    enable_time_window = options.get(read_config_value(config, '录制设置', '是否启用时间窗口监测(是/否)', "否"), False)
+    time_window_start = read_config_value(config, '录制设置', '监测开始时间', "19:00")
+    time_window_end = read_config_value(config, '录制设置', '监测结束时间', "23:30")
+    time_window_interval = int(read_config_value(config, '录制设置', '时间窗口内轮询间隔(秒)', 60))
     loop_time = options.get(read_config_value(config, '录制设置', '是否显示循环秒数', "否"), False)
     show_url = options.get(read_config_value(config, '录制设置', '是否显示直播源地址', "否"), False)
     split_video_by_time = options.get(read_config_value(config, '录制设置', '分段录制是否开启', "否"), False)
@@ -1823,6 +1943,8 @@ while True:
     converts_to_mp4 = options.get(read_config_value(config, '录制设置', '录制完成后自动转为mp4格式', "否"), False)
     converts_to_h264 = options.get(read_config_value(config, '录制设置', 'mp4格式重新编码为h264', "否"), False)
     delete_origin_file = options.get(read_config_value(config, '录制设置', '追加格式后删除原文件', "否"), False)
+    auto_merge_segments = options.get(read_config_value(config, '录制设置', '自动合并分段视频(是/否)', "否"), False)
+    delete_segments_after_merge = options.get(read_config_value(config, '录制设置', '合并后删除分段文件(是/否)', "否"), False)
     create_time_file = options.get(read_config_value(config, '录制设置', '生成时间字幕文件', "否"), False)
     is_run_script = options.get(read_config_value(config, '录制设置', '是否录制完成后执行自定义脚本', "否"), False)
     custom_script = read_config_value(config, '录制设置', '自定义脚本执行命令', "") if is_run_script else None
@@ -1937,6 +2059,19 @@ while True:
             logger.warning(f"Disk space remaining is below {disk_space_limit} GB. "
                            f"Exiting program due to the disk space limit being reached.")
             sys.exit(-1)
+    
+    # 显示时间窗口监测状态
+    if first_run and enable_time_window:
+        in_window = is_in_time_window(time_window_start, time_window_end)
+        if in_window:
+            color_obj.print_colored(f"⏰ 时间窗口监测已启用: {time_window_start}-{time_window_end} (当前在窗口内，轮询间隔{time_window_interval}秒)", 
+                                  color_obj.GREEN)
+        else:
+            wait_seconds = get_seconds_until_time_window(time_window_start)
+            wait_hours = wait_seconds // 3600
+            wait_minutes = (wait_seconds % 3600) // 60
+            color_obj.print_colored(f"⏰ 时间窗口监测已启用: {time_window_start}-{time_window_end} (当前在窗口外，{wait_hours}小时{wait_minutes}分钟后开始监测)", 
+                                  color_obj.YELLOW)
 
 
     def contains_url(string: str) -> bool:

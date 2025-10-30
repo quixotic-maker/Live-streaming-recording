@@ -1,0 +1,16 @@
+# 表情识别功能依赖
+
+# 基础依赖
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# 表情识别库（推荐）
+fer>=22.5.0
+
+# 可选：更强大的表情识别（需要额外设置）
+# deepface>=0.0.79
+# tensorflow>=2.13.0  # DeepFace的依赖
+
+# 如果使用GPU加速（可选）
+# tensorflow-gpu>=2.13.0
+
