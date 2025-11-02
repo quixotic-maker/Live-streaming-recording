@@ -639,10 +639,35 @@ class IntegratedRecognitionSystem:
         self.recognition_results = {}
     
     def _load_songs(self) -> List[Dict]:
-        """加载歌曲列表"""
+        """加载歌曲列表或唱歌片段"""
         with open(self.song_list_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data.get('songs', [])
+            
+            # 支持两种格式
+            if 'songs' in data:
+                # 格式1: 标准歌曲列表 {"songs": [...]}
+                return data['songs']
+            elif 'segments' in data:
+                # 格式2: 唱歌片段 {"segments": [...]}
+                # 将segments转换为songs格式
+                songs = []
+                for i, seg in enumerate(data['segments'], 1):
+                    songs.append({
+                        'id': i,
+                        'start': seg.get('start', 0),
+                        'end': seg.get('end', 0),
+                        'duration': seg.get('duration', 0),
+                        'text': seg.get('text', ''),
+                        'title': None,  # 待识别
+                        'artist': None,
+                        'confidence': 0,
+                        'source': 'singing_segment'
+                    })
+                print(f"✓ 从唱歌片段转换了 {len(songs)} 首待识别歌曲")
+                return songs
+            else:
+                print(f"⚠️  未识别的文件格式")
+                return []
     
     def _load_transcript(self) -> List[Dict]:
         """加载转录文本"""
@@ -707,7 +732,7 @@ class IntegratedRecognitionSystem:
             title = song.get('title', f'歌曲{i}')
             
             # 跳过已知歌曲
-            if not title.startswith('未知歌曲'):
+            if title and not title.startswith('未知歌曲'):
                 print(f"[{i}/{len(self.songs)}] 跳过: {title} (已有歌名)")
                 self.recognition_results[song_id] = {
                     'title': title,
@@ -871,8 +896,12 @@ class IntegratedRecognitionSystem:
         sources = Counter(r['source'] for r in self.recognition_results.values())
         
         print(f"总歌曲数: {total}")
-        print(f"已识别: {recognized} ({recognized/total*100:.1f}%)")
-        print(f"未识别: {unknown} ({unknown/total*100:.1f}%)")
+        if total > 0:
+            print(f"已识别: {recognized} ({recognized/total*100:.1f}%)")
+            print(f"未识别: {unknown} ({unknown/total*100:.1f}%)")
+        else:
+            print(f"已识别: {recognized}")
+            print(f"未识别: {unknown}")
         print()
         print("识别来源：")
         for source, count in sources.items():
@@ -901,13 +930,23 @@ class IntegratedRecognitionSystem:
 async def main():
     """主函数"""
     import asyncio
+    import argparse
     
-    # 配置路径
+    parser = argparse.ArgumentParser(description='智能歌曲识别系统')
+    parser.add_argument('--video', type=str, help='视频文件路径')
+    parser.add_argument('--singing', type=str, help='唱歌片段JSON文件路径（singing_素材.json）')
+    parser.add_argument('--transcript', type=str, help='Whisper转录JSON文件路径')
+    parser.add_argument('--danmaku', type=str, help='弹幕文件路径（可选）')
+    parser.add_argument('--output', type=str, help='输出识别结果JSON文件路径')
+    args = parser.parse_args()
+    
+    # 使用命令行参数或默认值
     material_dir = os.path.expanduser("~/shanshan_materials")
-    video_path = "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4"
-    song_list_path = os.path.join(material_dir, "歌曲素材库/歌曲列表.json")
-    transcript_path = "speech_analysis_完整转录.json"
-    danmaku_path = None  # 待集成弹幕录制后填写
+    video_path = args.video or "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4"
+    song_list_path = args.singing or os.path.join(material_dir, "歌曲素材库/歌曲列表.json")
+    transcript_path = args.transcript or "speech_analysis_完整转录.json"
+    danmaku_path = args.danmaku
+    output_path = args.output or os.path.join(material_dir, "歌曲识别结果.json")
     
     # 检查文件
     if not os.path.exists(video_path):
@@ -915,7 +954,8 @@ async def main():
         return
     
     if not os.path.exists(song_list_path):
-        print(f"❌ 歌曲列表不存在: {song_list_path}")
+        print(f"❌ 唱歌片段文件不存在: {song_list_path}")
+        print(f"   提示: 请先运行内容分类生成 singing_素材.json")
         return
     
     if not os.path.exists(transcript_path):
@@ -930,7 +970,14 @@ async def main():
         danmaku_path
     )
     
-    await system.recognize_all()
+    results = await system.recognize_all()
+    
+    # 保存结果
+    if output_path and results:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"\n✅ 识别结果已保存: {output_path}")
 
 
 if __name__ == "__main__":

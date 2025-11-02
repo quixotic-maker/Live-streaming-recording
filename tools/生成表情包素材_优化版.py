@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src
 
 from gesture_detector import MotionDetector, PoseDetector, MultimodalDetector
 from emoji_generator import EmojiGenerator
-from material_organizer import MaterialOrganizer
+# ✅ 移除MaterialOrganizer - 改用简单目录创建
+# from material_organizer import MaterialOrganizer
 
 
 # 配置参数
@@ -68,7 +69,11 @@ class EmojiMaterialGenerator:
         self.multimodal_detector = MultimodalDetector(config.get("multimodal_config", {}))
         
         self.emoji_generator = EmojiGenerator()
-        self.organizer = MaterialOrganizer(self.output_dir)
+        # ✅ 移除MaterialOrganizer，改用简单目录创建
+        # self.organizer = MaterialOrganizer(self.output_dir)
+        
+        # 创建简化的输出目录结构
+        self._create_simple_structure()
         
         self.dance_moments = []
         self.thank_moments = []
@@ -87,6 +92,17 @@ class EmojiMaterialGenerator:
         else:
             print(f"  分析时长: 全部视频")
         print()
+    
+    def _create_simple_structure(self):
+        """创建简化的目录结构（不使用MaterialOrganizer）"""
+        output_path = Path(self.output_dir)
+        
+        # 创建基础目录
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # 无需创建复杂的"站"结构，只创建实际需要的
+        # 表情包会直接保存在output_dir下
+        print("✅ 使用简化目录结构（无MaterialOrganizer）")
     
     def load_data(self):
         """加载已有数据"""
@@ -265,11 +281,15 @@ class EmojiMaterialGenerator:
         print(f"\n✓ 表情包生成完成: {len(self.all_emojis)}个")
     
     def organize_emojis(self):
-        """分类存储表情包"""
+        """分类存储表情包（已禁用 - 使用简化结构）"""
         print("\n[步骤5] 分类存储")
         print("-" * 70)
+        print("⚠️  MaterialOrganizer已禁用，表情包直接保存在输出目录")
+        print("✓ 跳过分类存储步骤")
+        return
         
-        self.organizer.create_directory_structure()
+        # ❌ 以下代码已禁用（依赖MaterialOrganizer）
+        # self.organizer.create_directory_structure()
         
         print(f"整理 {len(self.all_emojis)} 个表情包...")
         
@@ -335,12 +355,16 @@ class EmojiMaterialGenerator:
         print(f"   {os.path.abspath(self.output_dir)}/表情包站/")
     
     def generate_reports(self):
-        """生成报告"""
+        """生成报告（已禁用 - 使用简化结构）"""
         print("\n[步骤6] 生成报告和索引")
         print("-" * 70)
+        print("⚠️  MaterialOrganizer已禁用，跳过报告生成")
+        print("✓ 跳过报告步骤")
+        return
         
-        self.organizer.save_indexes()
-        stats = self.organizer.generate_statistics()
+        # ❌ 以下代码已禁用（依赖MaterialOrganizer）
+        # self.organizer.save_indexes()
+        # stats = self.organizer.generate_statistics()
         
         print("\n📊 统计报告:")
         print(f"  总文件数: {stats['total_files']}")

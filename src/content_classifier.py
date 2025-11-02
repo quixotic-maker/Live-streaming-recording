@@ -47,7 +47,7 @@ class ContentClassifier:
         
         # 歌曲相关词汇（通常是歌词）
         self.song_patterns = [
-            r'[^\u4e00-\u9fa5]{10,}',  # 连续10个以上非中文（可能是歌词）
+            r'[^\u4e00-\u9fa5\s]{15,}',  # 连续15个以上非中文非空格（可能是歌词，排除"happy night"）
             r'(啊+|呜+|哦+|嗯+){3,}',  # 拟声词重复
             r'.{2,}你.{2,}我.{2,}',  # 歌词模式：你...我...
         ]
@@ -104,21 +104,45 @@ class ContentClassifier:
         3. 包含大量拟声词
         4. 文字很长（>50字）通常是连续歌词
         """
-        # 短句不太可能是唱歌
-        if len(text) < 10:
+        # 短句不太可能是唱歌（但英文歌词可以很短）
+        if len(text) < 5:
             return False
         
-        # 长文本（>50字）很可能是歌词
-        if len(text) > 50:
+        # ✅ 排除：提到歌曲但不是在唱（聊天内容）
+        chat_about_song_patterns = [
+            '这首歌', '那首歌', '唱首', '唱一首', '来唱', '我们唱', '下一首',
+            '点歌', '点首', '要听', '想听', '什么歌', '歌名', '好听',
+            '叫什么', '是什么', '叫《', '歌叫', '来个', '我会', '我不会'
+        ]
+        if any(p in text for p in chat_about_song_patterns):
+            return False
+        
+        # ✅ 排除：问句（唱歌时很少问问题）
+        if '？' in text or ('吗' in text and len(text) < 30):
+            return False
+        
+        # ✅ 长文本（>80字）且无聊天特征 = 很可能是歌词
+        if len(text) > 80:
             return True
         
-        # 持续时间很长（>30秒）通常是唱歌
-        if duration > 30:
+        # ✅ 持续时间很长（>45秒）且文字不短 = 可能是唱歌
+        if duration > 45 and len(text) > 20:
             return True
         
-        # 持续时间较长 + 文字较长 = 可能是唱歌
-        if duration > 10 and len(text) > 20:
+        # ✅ 持续时间较长 + 文字较长 = 可能是唱歌（阈值提高）
+        if duration > 20 and len(text) > 40:
             return True
+        
+        # ✅ 新增：重复词模式（"kiss kiss", "yeah yeah", "baby baby"）
+        words = text.lower().split()
+        if len(words) >= 2:
+            # 计算重复词数量
+            from collections import Counter
+            word_counts = Counter(words)
+            repeated_words = sum(1 for count in word_counts.values() if count >= 2)
+            # 如果一半以上的单词都是重复的，很可能是歌词
+            if repeated_words / len(word_counts) >= 0.4:
+                return True
         
         # 检查歌词模式
         for pattern in self.song_patterns:
@@ -130,10 +154,10 @@ class ContentClassifier:
         if vocal_sounds >= 2:
             return True
         
-        # 检查是否包含歌词特征词
-        song_keywords = ['歌', '唱', '这首', '翻唱', '点歌']
-        if any(k in text for k in song_keywords):
-            return True
+        # ❌ 移除：这个太激进，"这首歌很好听"也会匹配
+        # song_keywords = ['歌', '唱', '这首', '翻唱', '点歌']
+        # if any(k in text for k in song_keywords):
+        #     return True
         
         return False
     
@@ -156,6 +180,11 @@ class ContentClassifier:
     
     def _is_chatting(self, text: str) -> bool:
         """判断是否是闲聊"""
+        # ✅ 新增：提到歌曲的聊天
+        chat_about_song = ['这首歌', '那首歌', '什么歌', '歌名', '叫《', '来个', '唱首', '我们唱', '来唱', '下一首', '晚上好', '早上好', '好听']
+        if any(p in text for p in chat_about_song):
+            return True
+        
         # 包含互动关键词
         for keyword in self.chat_keywords:
             if keyword in text:
