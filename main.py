@@ -32,6 +32,7 @@ from src.proxy import ProxyDetector
 from src.utils import logger
 from src import utils
 from src.video_merger import merge_by_session
+from src.danmaku_manager import get_danmaku_manager
 from msg_push import (
     dingtalk, xizhi, tg_bot, send_email, bark, ntfy, pushplus
 )
@@ -471,8 +472,16 @@ def direct_download_stream(source_url: str, save_path: str, record_name: str, li
 
 
 def check_subprocess(record_name: str, record_url: str, ffmpeg_command: list, save_type: str,
-                     script_command: str | None = None) -> bool:
+                     script_command: str | None = None, platform: str = '未知平台') -> bool:
     save_file_path = ffmpeg_command[-1]
+    
+    # 获取主播名称（去掉平台前缀）
+    anchor_name = record_name.split(' ', maxsplit=1)[-1] if ' ' in record_name else record_name
+    
+    # 启动弹幕录制
+    danmaku_manager = get_danmaku_manager()
+    danmaku_manager.start_recording(platform, record_url, anchor_name, save_file_path)
+    
     process = subprocess.Popen(
         ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.STDOUT, startupinfo=get_startup_info(os_type)
     )
@@ -490,6 +499,8 @@ def check_subprocess(record_name: str, record_url: str, ffmpeg_command: list, sa
         if record_url in url_comments or exit_recording:
             color_obj.print_colored(f"[{record_name}]录制时已被注释,本条线程将会退出", color_obj.YELLOW)
             clear_record_info(record_name, record_url)
+            # 停止弹幕录制
+            danmaku_manager.stop_recording(anchor_name)
             # process.terminate()
             if os.name == 'nt':
                 if process.stdin:
@@ -578,6 +589,9 @@ def check_subprocess(record_name: str, record_url: str, ffmpeg_command: list, sa
     else:
         color_obj.print_colored(f"\n{record_name} {stop_time} 直播录制出错,返回码: {return_code}\n", color_obj.RED)
 
+    # 停止弹幕录制
+    danmaku_manager.stop_recording(anchor_name)
+    
     recording.discard(record_name)
     return False
 
@@ -1385,7 +1399,8 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             record_url,
                                             ffmpeg_command,
                                             record_save_type,
-                                            custom_script
+                                            custom_script,
+                                            platform
                                         )
                                         if comment_end:
                                             return
@@ -1477,7 +1492,8 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             record_url,
                                             ffmpeg_command,
                                             record_save_type,
-                                            custom_script
+                                            custom_script,
+                                            platform
                                         )
                                         if comment_end:
                                             return
@@ -1551,7 +1567,8 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             record_url,
                                             ffmpeg_command,
                                             record_save_type,
-                                            custom_script
+                                            custom_script,
+                                            platform
                                         )
                                         if comment_end:
                                             return
@@ -1598,7 +1615,8 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             record_url,
                                             ffmpeg_command,
                                             record_save_type,
-                                            custom_script
+                                            custom_script,
+                                            platform
                                         )
                                         if comment_end:
                                             return

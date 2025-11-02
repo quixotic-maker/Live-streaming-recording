@@ -1,0 +1,25 @@
+# 多模态精彩片段检测依赖
+
+# 基础依赖
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# 语音识别（推荐，准确率大幅提升）
+openai-whisper>=20231117
+
+# Whisper依赖
+torch>=2.0.0
+torchaudio>=2.0.0
+ffmpeg-python>=0.2.0
+
+# 可选：GPU加速
+# torch>=2.0.0+cu118  # CUDA 11.8
+# torchaudio>=2.0.0+cu118
+
+# 备注：
+# 1. Whisper是语音识别的核心，强烈推荐安装
+# 2. 如果不安装Whisper，只能使用礼物检测，准确率会降低
+# 3. 如果有NVIDIA GPU，安装CUDA版本的torch可以大幅加速
+
+
+

@@ -1,0 +1,15 @@
+{
+  "name": "观山",
+  "trigger_keywords": [
+    "谢谢",
+    "啊",
+    "爱你",
+    "宝宝"
+  ],
+  "emotion_keywords": [],
+  "gift_colors": [],
+  "peak_time_start": 0,
+  "peak_time_end": 20,
+  "peak_weight": 2.0,
+  "analysis_notes": "基于完整语音分析自动生成"
+}

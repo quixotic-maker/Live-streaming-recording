@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 
 # 添加项目路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.video_merger import merge_videos_ffmpeg, auto_merge_daily_videos, merge_by_session
 

@@ -1,0 +1,343 @@
+{
+  "video": "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4",
+  "video_name": "观山_2025-10-30.mp4",
+  "total_highlights": 25,
+  "statistics": {
+    "total_duration": 67,
+    "avg_score": 5.816666666666666,
+    "high_score_count": 0,
+    "keyword_count": 25,
+    "gift_count": 0,
+    "peak_count": 3
+  },
+  "highlights": [
+    {
+      "index": 1,
+      "start": 175,
+      "end": 177,
+      "duration": 2,
+      "score": 10.0,
+      "sources": [
+        "高峰期",
+        "关键词:可爱"
+      ],
+      "details": {
+        "keyword": "可爱"
+      }
+    },
+    {
+      "index": 2,
+      "start": 242,
+      "end": 244,
+      "duration": 2,
+      "score": 10.0,
+      "sources": [
+        "高峰期",
+        "关键词:可爱"
+      ],
+      "details": {
+        "keyword": "可爱"
+      }
+    },
+    {
+      "index": 3,
+      "start": 956,
+      "end": 958,
+      "duration": 2,
+      "score": 10.0,
+      "sources": [
+        "关键词:宝宝",
+        "高峰期"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 4,
+      "start": 10013,
+      "end": 10015,
+      "duration": 2,
+      "score": 6.666666666666667,
+      "sources": [
+        "关键词:开心"
+      ],
+      "details": {
+        "keyword": "开心"
+      }
+    },
+    {
+      "index": 5,
+      "start": 2642,
+      "end": 2651,
+      "duration": 9,
+      "score": 6.5,
+      "sources": [
+        "关键词:厉害"
+      ],
+      "details": {
+        "keyword": "厉害"
+      }
+    },
+    {
+      "index": 6,
+      "start": 13550,
+      "end": 13553,
+      "duration": 3,
+      "score": 6.25,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 7,
+      "start": 12124,
+      "end": 12128,
+      "duration": 4,
+      "score": 6.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 8,
+      "start": 2433,
+      "end": 2435,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:开心"
+      ],
+      "details": {
+        "keyword": "开心"
+      }
+    },
+    {
+      "index": 9,
+      "start": 3110,
+      "end": 3112,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 10,
+      "start": 3149,
+      "end": 3151,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 11,
+      "start": 3380,
+      "end": 3382,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 12,
+      "start": 3828,
+      "end": 3831,
+      "duration": 3,
+      "score": 5.0,
+      "sources": [
+        "关键词:开心"
+      ],
+      "details": {
+        "keyword": "开心"
+      }
+    },
+    {
+      "index": 13,
+      "start": 3872,
+      "end": 3874,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:开心"
+      ],
+      "details": {
+        "keyword": "开心"
+      }
+    },
+    {
+      "index": 14,
+      "start": 5128,
+      "end": 5132,
+      "duration": 4,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 15,
+      "start": 5412,
+      "end": 5414,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 16,
+      "start": 5458,
+      "end": 5460,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:可爱"
+      ],
+      "details": {
+        "keyword": "可爱"
+      }
+    },
+    {
+      "index": 17,
+      "start": 10051,
+      "end": 10053,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 18,
+      "start": 10057,
+      "end": 10059,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 19,
+      "start": 10070,
+      "end": 10072,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 20,
+      "start": 10296,
+      "end": 10301,
+      "duration": 5,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 21,
+      "start": 10467,
+      "end": 10469,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:开心"
+      ],
+      "details": {
+        "keyword": "开心"
+      }
+    },
+    {
+      "index": 22,
+      "start": 10827,
+      "end": 10829,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 23,
+      "start": 10857,
+      "end": 10859,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 24,
+      "start": 12650,
+      "end": 12653,
+      "duration": 3,
+      "score": 5.0,
+      "sources": [
+        "关键词:宝宝"
+      ],
+      "details": {
+        "keyword": "宝宝"
+      }
+    },
+    {
+      "index": 25,
+      "start": 13423,
+      "end": 13425,
+      "duration": 2,
+      "score": 5.0,
+      "sources": [
+        "关键词:可爱"
+      ],
+      "details": {
+        "keyword": "可爱"
+      }
+    }
+  ]
+}

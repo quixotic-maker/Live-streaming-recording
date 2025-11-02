@@ -1,0 +1,18 @@
+# 智能歌曲识别系统依赖
+
+# 音频指纹识别
+shazamio>=0.4.0          # Shazam音乐识别
+aiohttp>=3.9.0           # 异步HTTP客户端
+aiodns>=3.1.0            # 异步DNS解析
+
+# 可选：ACRCloud（商业API，更准确）
+# acrcloud>=1.0.0
+
+# 音频处理（已有）
+# ffmpeg-python>=0.2.0   # FFmpeg Python绑定（可选）
+
+# 数据处理（已有）
+# 这些依赖在主项目中已经存在
+
+
+

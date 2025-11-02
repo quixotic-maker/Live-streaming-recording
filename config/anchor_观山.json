@@ -1,0 +1,23 @@
+{
+  "name": "观山",
+  "trigger_keywords": [
+    "厉害",
+    "宝宝",
+    "萌",
+    "开心",
+    "太搞笑了",
+    "可爱",
+    "笑死",
+    "我的天",
+    "好可爱",
+    "哈哈哈",
+    "比心",
+    "爱你",
+    "晚安",
+  ],
+  "emotion_keywords": [],
+  "gift_colors": [],
+  "peak_time_start": 0,
+  "peak_time_end": 20,
+  "peak_weight": 2.0
+}

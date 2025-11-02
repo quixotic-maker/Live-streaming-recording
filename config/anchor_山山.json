@@ -1,0 +1,17 @@
+{
+  "name": "山山",
+  "trigger_keywords": [
+    "宝宝",
+    "哈哈哈",
+    "厉害",
+    "笑死",
+    "太搞笑了",
+    "我的天",
+    "可爱"
+  ],
+  "emotion_keywords": [],
+  "gift_colors": [],
+  "peak_time_start": 0,
+  "peak_time_end": 20,
+  "peak_weight": 2.0
+}

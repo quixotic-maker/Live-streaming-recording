@@ -1,0 +1,79 @@
+{
+  "video": "demo_video.mp4",
+  "total_highlights": 5,
+  "highlights": [
+    {
+      "index": 1,
+      "start": 135.0,
+      "end": 142.0,
+      "duration": 7.0,
+      "score": 16.0,
+      "sources": [
+        "关键词:哈哈哈",
+        "礼物",
+        "高峰期"
+      ],
+      "details": {
+        "keyword": "哈哈哈",
+        "gift_confidence": 0.8
+      }
+    },
+    {
+      "index": 2,
+      "start": 258.0,
+      "end": 265.0,
+      "duration": 7.0,
+      "score": 14.5,
+      "sources": [
+        "关键词:笑死",
+        "高峰期"
+      ],
+      "details": {
+        "keyword": "笑死"
+      }
+    },
+    {
+      "index": 3,
+      "start": 420.0,
+      "end": 427.0,
+      "duration": 7.0,
+      "score": 12.0,
+      "sources": [
+        "关键词:我的天",
+        "礼物",
+        "高峰期"
+      ],
+      "details": {
+        "keyword": "我的天",
+        "gift_confidence": 0.7
+      }
+    },
+    {
+      "index": 4,
+      "start": 680.0,
+      "end": 686.0,
+      "duration": 6.0,
+      "score": 10.0,
+      "sources": [
+        "关键词:可爱",
+        "高峰期"
+      ],
+      "details": {
+        "keyword": "可爱"
+      }
+    },
+    {
+      "index": 5,
+      "start": 1850.0,
+      "end": 1856.0,
+      "duration": 6.0,
+      "score": 6.0,
+      "sources": [
+        "礼物"
+      ],
+      "details": {
+        "gift_confidence": 0.9
+      }
+    }
+  ]
+}
