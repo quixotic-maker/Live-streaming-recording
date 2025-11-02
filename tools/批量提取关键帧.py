@@ -23,17 +23,19 @@ from datetime import datetime
 class KeyFrameExtractor:
     """关键帧提取器"""
     
-    def __init__(self, video_path: str, output_dir: str):
+    def __init__(self, video_path: str, output_dir: str, quality: int = 95):
         """
         初始化提取器
         
         Args:
             video_path: 视频文件路径
             output_dir: 输出目录
+            quality: JPEG质量（1-100，默认95）
         """
         self.video_path = video_path
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.quality = quality
         
         # 打开视频
         self.cap = cv2.VideoCapture(video_path)
@@ -53,7 +55,7 @@ class KeyFrameExtractor:
         print(f"  总帧数: {self.total_frames}")
         print(f"  时长: {self.duration/60:.1f} 分钟")
     
-    def extract_by_interval(self, interval: int = 30, quality: int = 95) -> List[Dict]:
+    def extract_by_interval(self, interval: int = 30, quality: int = None) -> List[Dict]:
         """
         按固定间隔提取截图
         
@@ -85,7 +87,7 @@ class KeyFrameExtractor:
             filepath = output_subdir / filename
             
             # 保存截图
-            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality or self.quality])
             
             screenshots.append({
                 "time": timestamp,
@@ -146,7 +148,7 @@ class KeyFrameExtractor:
                     filename = f"scene_{int(timestamp):06d}s_diff{diff_score:.1f}.jpg"
                     filepath = output_subdir / filename
                     
-                    cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                    cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality or self.quality])
                     
                     screenshots.append({
                         "time": timestamp,
@@ -207,7 +209,7 @@ class KeyFrameExtractor:
             filename = f"{int(timestamp):06d}s_{safe_label}.jpg"
             filepath = output_subdir / filename
             
-            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality or self.quality])
             
             screenshots.append({
                 "time": timestamp,
@@ -381,41 +383,49 @@ def load_material_timestamps(material_dir: str) -> Dict[str, List[Dict]]:
 
 def main():
     """主函数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='批量提取关键帧截图工具')
+    parser.add_argument('--video', type=str, help='视频文件路径')
+    parser.add_argument('--output', type=str, help='输出目录')
+    parser.add_argument('--material_dir', type=str, help='素材目录（用于模式3）')
+    parser.add_argument('--mode', type=str, default='1', 
+                       help='提取模式: 1=固定间隔, 2=场景变化, 3=素材时间点, 4=全部 (默认1)')
+    parser.add_argument('--interval', type=int, default=30, help='固定间隔（秒，默认30）')
+    parser.add_argument('--quality', type=int, default=95, help='JPEG质量（1-100，默认95）')
+    args = parser.parse_args()
+    
     print("=" * 70)
     print("批量提取关键帧截图工具")
     print("=" * 70)
     
-    # 配置
-    video_path = "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4"
-    output_dir = os.path.expanduser("~/shanshan_materials/关键帧截图")
-    material_dir = os.path.expanduser("~/shanshan_materials")
+    # 配置（优先使用命令行参数）
+    video_path = args.video or "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4"
+    output_dir = args.output or os.path.expanduser("~/shanshan_materials/关键帧截图")
+    material_dir = args.material_dir or os.path.expanduser("~/shanshan_materials")
     
     # 验证视频文件
     if not os.path.exists(video_path):
         print(f"错误: 视频文件不存在: {video_path}")
-        print("\n请修改脚本中的 video_path 为实际路径")
+        print("\n请使用 --video 参数指定正确的视频路径")
         return
     
     print(f"\n视频文件: {video_path}")
-    print(f"输出目录: {output_dir}\n")
+    print(f"输出目录: {output_dir}")
+    print(f"提取模式: {args.mode}\n")
     
     # 创建提取器
-    extractor = KeyFrameExtractor(video_path, output_dir)
+    extractor = KeyFrameExtractor(video_path, output_dir, quality=args.quality)
     
     all_screenshots = []
     
-    # 模式选择
-    print("\n请选择提取模式:")
-    print("  1. 固定间隔截图")
-    print("  2. 场景变化检测")
-    print("  3. 素材时间点截图")
-    print("  4. 全部模式")
+    # 使用命令行参数指定的模式
+    choice = args.mode
     
     try:
-        choice = input("\n选择 (1-4, 默认4): ").strip() or "4"
         
         if choice in ["1", "4"]:
-            screenshots = extractor.extract_by_interval(interval=30)
+            screenshots = extractor.extract_by_interval(interval=args.interval)
             all_screenshots.extend(screenshots)
         
         if choice in ["2", "4"]:

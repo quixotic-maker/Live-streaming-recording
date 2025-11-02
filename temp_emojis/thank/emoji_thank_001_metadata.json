@@ -1,0 +1,52 @@
+{
+  "source": {
+    "video_path": "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4",
+    "start": 131.7999999999998,
+    "end": 133.7999999999998,
+    "duration": 2.0,
+    "frames_extracted": 40
+  },
+  "gifs": {
+    "small": {
+      "path": "temp_emojis/thank/emoji_thank_001_240x240.gif",
+      "size": [
+        240,
+        240
+      ],
+      "frames": 40,
+      "duration": 2.6666666666666665,
+      "file_size_kb": 638.11,
+      "fps": 15
+    },
+    "medium": {
+      "path": "temp_emojis/thank/emoji_thank_001_300x300.gif",
+      "size": [
+        300,
+        300
+      ],
+      "frames": 40,
+      "duration": 2.6666666666666665,
+      "file_size_kb": 929.64,
+      "fps": 15
+    },
+    "large": {
+      "path": "temp_emojis/thank/emoji_thank_001_512x512.gif",
+      "size": [
+        512,
+        512
+      ],
+      "frames": 40,
+      "duration": 2.6666666666666665,
+      "file_size_kb": 2161.73,
+      "fps": 15
+    }
+  },
+  "static": {
+    "path": "temp_emojis/thank/emoji_thank_001_hd.png",
+    "size": [
+      1920,
+      1080
+    ],
+    "file_size_kb": 1257.87
+  }
+}

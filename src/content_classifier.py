@@ -32,6 +32,19 @@ class ContentClassifier:
             "喜欢", "好看", "漂亮", "帅", "美"
         }
         
+        # 日常活动关键词
+        self.daily_keywords = {
+            # 开场/结束
+            "开始", "来了", "上播", "下播", "拜拜", "再见", "结束",
+            # 日常活动
+            "喝水", "喝口水", "吃东西", "吃点", "休息", "等一下", "稍等",
+            "看看", "看一下", "手机", "消息", "整理", "弄一下",
+            # 状态描述
+            "累了", "困了", "饿了", "渴了",
+            # 无意义发音（非唱歌） - 移除"这个"、"那个"避免误捕获
+            "嗯嗯", "啊啊", "哦哦", "呃呃"
+        }
+        
         # 歌曲相关词汇（通常是歌词）
         self.song_patterns = [
             r'[^\u4e00-\u9fa5]{10,}',  # 连续10个以上非中文（可能是歌词）
@@ -48,22 +61,26 @@ class ContentClassifier:
             duration: 持续时间（秒）
             
         Returns:
-            类别: "singing", "gift", "chat", "unknown"
+            类别: "singing", "gift", "chat", "daily", "unknown"
         """
         text = text.strip()
         
         if not text:
             return "unknown"
         
-        # 1. 检查是否是礼物感谢
-        if self._is_gift_thanks(text):
-            return "gift"
-        
-        # 2. 检查是否是唱歌
+        # 1. 检查是否是唱歌（优先级提高，避免被礼物感谢误捕获）
         if self._is_singing(text, duration):
             return "singing"
         
-        # 3. 检查是否是闲聊
+        # 2. 检查是否是礼物感谢
+        if self._is_gift_thanks(text):
+            return "gift"
+        
+        # 3. 检查是否是日常活动
+        if self._is_daily(text):
+            return "daily"
+        
+        # 4. 检查是否是闲聊
         if self._is_chatting(text):
             return "chat"
         
@@ -120,6 +137,23 @@ class ContentClassifier:
         
         return False
     
+    def _is_daily(self, text: str) -> bool:
+        """判断是否是日常活动"""
+        # 问句优先不判定为日常（避免误捕获聊天）
+        if text.endswith('?') or text.endswith('？'):
+            return False
+        
+        # 包含日常关键词
+        for keyword in self.daily_keywords:
+            if keyword in text:
+                return True
+        
+        # 非常短的文字（<5字）通常是日常无意义发音
+        if len(text) < 5:
+            return True
+        
+        return False
+    
     def _is_chatting(self, text: str) -> bool:
         """判断是否是闲聊"""
         # 包含互动关键词
@@ -156,6 +190,7 @@ class ContentClassifier:
             "singing": [],
             "gift": [],
             "chat": [],
+            "daily": [],
             "unknown": []
         }
         

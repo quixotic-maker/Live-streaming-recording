@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import List, Dict
 
 # 添加src目录到路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
 
 from gesture_detector import MotionDetector, PoseDetector, MultimodalDetector
 from emoji_generator import EmojiGenerator
@@ -82,7 +82,10 @@ class EmojiMaterialGenerator:
         print(f"\n优化配置:")
         print(f"  运动阈值: {config['motion_config']['motion_threshold']}")
         print(f"  推荐阈值: {config['multimodal_config']['recommend_threshold']}")
-        print(f"  分析时长: {config['test_duration']/60:.0f}分钟")
+        if config.get('test_duration'):
+            print(f"  分析时长: {config['test_duration']/60:.0f}分钟")
+        else:
+            print(f"  分析时长: 全部视频")
         print()
     
     def load_data(self):
@@ -117,16 +120,18 @@ class EmojiMaterialGenerator:
         print("\n[步骤2] 方案A: 运动检测 - 查找手势舞")
         print("-" * 70)
         
-        test_duration = self.config.get("test_duration", 3600)
-        print(f"分析时间范围: 0-{test_duration/60:.0f}分钟")
+        test_duration = self.config.get("test_duration")
+        if test_duration:
+            print(f"分析时间范围: 0-{test_duration/60:.0f}分钟")
+        else:
+            print(f"分析时间范围: 全部视频")
         print(f"运动阈值: {self.config['motion_config']['motion_threshold']}")
         print("这可能需要几分钟...")
         
-        self.dance_moments = self.motion_detector.detect_dance_moments(
-            video_path=self.video_path,
-            start_time=0,
-            end_time=test_duration
-        )
+        detect_kwargs = {"video_path": self.video_path, "start_time": 0}
+        if test_duration:
+            detect_kwargs["end_time"] = test_duration
+        self.dance_moments = self.motion_detector.detect_dance_moments(**detect_kwargs)
         
         print(f"\n✓ 找到 {len(self.dance_moments)} 个手势舞候选片段")
         
@@ -396,6 +401,28 @@ class EmojiMaterialGenerator:
 
 def main():
     """主函数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='表情包素材生成 - 优化版')
+    parser.add_argument('--video', type=str, help='视频文件路径')
+    parser.add_argument('--output', type=str, help='输出目录')
+    parser.add_argument('--max_emojis', type=int, default=20, help='最大表情包数量')
+    parser.add_argument('--duration', type=int, help='分析时长（秒），不指定则分析全部')
+    args = parser.parse_args()
+    
+    # 使用命令行参数覆盖配置
+    if args.video:
+        config["video_path"] = args.video
+    if args.output:
+        config["output_dir"] = args.output
+    if args.duration:
+        config["test_duration"] = args.duration
+    else:
+        # 如果没有指定duration，移除限制（分析全部）
+        config["test_duration"] = None
+    
+    config["max_dance_moments"] = args.max_emojis // 2
+    config["max_thank_moments"] = args.max_emojis
     
     if not os.path.exists(config["video_path"]):
         print(f"错误: 视频文件不存在: {config['video_path']}")

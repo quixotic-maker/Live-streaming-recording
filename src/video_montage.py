@@ -254,6 +254,85 @@ class VideoMontageGenerator:
         
         return output_path if success else None
     
+    def generate_daily_montage(
+        self,
+        video_path: str,
+        daily_data: List[Dict],
+        output_dir: str,
+        max_duration: int = 300
+    ) -> Optional[str]:
+        """
+        生成日常集锦
+        
+        Args:
+            video_path: 原始视频路径
+            daily_data: 日常片段数据列表
+            output_dir: 输出目录
+            max_duration: 最大时长（秒）
+        
+        Returns:
+            输出文件路径
+        """
+        logger.info("生成日常集锦")
+        
+        os.makedirs(output_dir, exist_ok=True)
+        
+        if not daily_data:
+            logger.warning("没有日常片段")
+            return None
+        
+        # 选择日常片段（开场、结束、休息等）
+        segments = []
+        total_duration = 0
+        
+        # 优先选择开场和结束
+        for daily in daily_data:
+            text = daily.get('text', '').lower()
+            duration = daily.get('duration', 10)
+            
+            # 如果达到最大时长，停止
+            if total_duration + duration > max_duration:
+                break
+            
+            # 开场片段（优先级高）
+            if any(k in text for k in ['开始', '来了', '上播', '大家好']):
+                segments.insert(0, {  # 插入到开头
+                    'start': daily['start'],
+                    'duration': min(duration, 15),  # 最多15秒
+                    'description': '开场'
+                })
+                total_duration += min(duration, 15)
+            # 结束片段（优先级高）
+            elif any(k in text for k in ['下播', '拜拜', '再见', '结束']):
+                segments.append({
+                    'start': daily['start'],
+                    'duration': min(duration, 15),
+                    'description': '结束'
+                })
+                total_duration += min(duration, 15)
+            # 其他日常片段
+            elif total_duration < max_duration * 0.7:  # 前70%时长可以添加其他日常
+                segments.append({
+                    'start': daily['start'],
+                    'duration': min(duration, 10),
+                    'description': text[:20]
+                })
+                total_duration += min(duration, 10)
+        
+        if not segments:
+            logger.warning("没有可用的日常片段")
+            return None
+        
+        output_path = os.path.join(output_dir, "日常集锦.mp4")
+        
+        success = self._concat_segments_with_transition(
+            video_path,
+            segments,
+            output_path
+        )
+        
+        return output_path if success else None
+    
     def generate_highlight_montage(
         self,
         video_path: str,
