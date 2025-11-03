@@ -8,8 +8,11 @@
 import os
 import json
 import re
+import logging
 from typing import List, Dict, Tuple
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 
 class ContentClassifier:
@@ -233,6 +236,98 @@ class ContentClassifier:
                 "text": seg["text"],
                 "duration": duration
             })
+        
+        # ✅ 后处理: 优化singing片段
+        classified = self._post_process_singing(classified)
+        
+        return classified
+    
+    def _post_process_singing(
+        self, 
+        classified: Dict[str, List[Dict]], 
+        min_duration: float = 5.0,
+        merge_gap: float = 10.0
+    ) -> Dict[str, List[Dict]]:
+        """
+        后处理singing片段：过滤短片段、合并连续片段
+        
+        Args:
+            classified: 原始分类结果
+            min_duration: 最小片段长度（秒），默认5秒
+            merge_gap: 合并间隔（秒），默认10秒
+            
+        Returns:
+            优化后的分类结果
+        """
+        singing_segments = classified.get("singing", [])
+        
+        if not singing_segments:
+            return classified
+        
+        logger.info(f"后处理singing片段: 原始{len(singing_segments)}个")
+        
+        # 步骤1: 按时间排序
+        singing_segments = sorted(singing_segments, key=lambda x: x["start"])
+        
+        # 步骤2: 合并连续片段（间隔<10秒）
+        merged_segments = []
+        current = None
+        
+        for seg in singing_segments:
+            if current is None:
+                current = seg.copy()
+                current["texts"] = [seg["text"]]
+            else:
+                gap = seg["start"] - current["end"]
+                
+                if gap <= merge_gap:
+                    # 合并
+                    current["end"] = seg["end"]
+                    current["duration"] = current["end"] - current["start"]
+                    current["text"] += " " + seg["text"]
+                    current["texts"].append(seg["text"])
+                else:
+                    # 保存当前，开始新的
+                    merged_segments.append(current)
+                    current = seg.copy()
+                    current["texts"] = [seg["text"]]
+        
+        # 添加最后一个
+        if current is not None:
+            merged_segments.append(current)
+        
+        logger.info(f"  合并后: {len(merged_segments)}个")
+        
+        # 步骤3: 过滤短片段（<5秒）
+        filtered_singing = []
+        reclassified = []
+        
+        for seg in merged_segments:
+            if seg["duration"] >= min_duration:
+                filtered_singing.append(seg)
+            else:
+                # 短片段重新分类为chat或unknown
+                reclassified.append(seg)
+        
+        logger.info(f"  过滤<{min_duration}秒: 保留{len(filtered_singing)}个，重分类{len(reclassified)}个")
+        
+        # 步骤4: 将短片段重新分类为chat
+        for seg in reclassified:
+            # 简单策略：短片段大多是chat
+            if any(keyword in seg["text"] for keyword in ["好听", "唱", "歌", "喜欢", "加油"]):
+                classified["chat"].append(seg)
+            else:
+                classified["unknown"].append(seg)
+        
+        # 步骤5: 统计最终结果
+        if filtered_singing:
+            avg_duration = sum(s["duration"] for s in filtered_singing) / len(filtered_singing)
+            logger.info(f"  最终singing: {len(filtered_singing)}个，平均时长{avg_duration:.1f}秒")
+        else:
+            logger.warning("  ⚠️  没有符合条件的singing片段")
+        
+        # 更新classified
+        classified["singing"] = filtered_singing
         
         return classified
     

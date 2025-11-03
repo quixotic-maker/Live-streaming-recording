@@ -63,12 +63,15 @@ class EmojiGenerator:
         """
         default_config = {
             "default_fps": 15,              # 默认GIF帧率
-            "max_size_kb": 1000,            # 最大文件大小（KB）
+            "max_size_kb": 2000,            # 最大文件大小（KB）- 放宽限制
             "quality": 85,                  # 图片质量（1-100）
             "optimize": True,               # 是否优化
             "loop": 0,                      # 循环次数（0=无限循环）
             "resize_method": "lanczos",     # 缩放方法
-            "hd_size": (1920, 1080)        # 高清图片尺寸
+            "hd_size": (1920, 1080),       # 高清图片尺寸
+            "use_gifsicle": True,           # 使用gifsicle专业优化
+            "gifsicle_colors": 256,         # gifsicle颜色数（保持最大）
+            "gifsicle_lossy": 20            # gifsicle有损压缩级别（0-200，20=轻度）
         }
         
         self.config = {**default_config, **(config or {})}
@@ -421,16 +424,34 @@ class EmojiGenerator:
         """
         优化GIF文件大小
         
-        策略：
-        1. 减少颜色数量
-        2. 降低帧率
-        3. 减少帧数
+        优先使用gifsicle专业优化（保持256色）
+        如果gifsicle不可用，回退到PIL优化
         
         Args:
             gif_path: GIF文件路径
             target_size_kb: 目标大小（KB）
             max_iterations: 最大迭代次数
         """
+        current_size_kb = os.path.getsize(gif_path) / 1024
+        
+        # 如果已经满足要求，直接返回
+        if current_size_kb <= target_size_kb:
+            logger.info(f"文件大小已满足要求: {current_size_kb:.2f}KB")
+            return
+        
+        # 优先使用gifsicle优化
+        if self.config.get("use_gifsicle", True):
+            try:
+                success = self._optimize_with_gifsicle(gif_path, target_size_kb)
+                if success:
+                    final_size_kb = os.path.getsize(gif_path) / 1024
+                    logger.info(f"✅ gifsicle优化完成: {current_size_kb:.2f}KB -> {final_size_kb:.2f}KB")
+                    return
+            except Exception as e:
+                logger.warning(f"gifsicle优化失败: {e}，回退到PIL优化")
+        
+        # 回退到PIL优化（保守策略，保留更多颜色）
+        logger.info("使用PIL优化...")
         for iteration in range(max_iterations):
             current_size_kb = os.path.getsize(gif_path) / 1024
             
@@ -453,20 +474,21 @@ class EmojiGenerator:
             except EOFError:
                 pass
             
-            # 策略1: 减少颜色（从256逐步降到64）
-            colors = max(64, 256 - iteration * 32)
+            # ✅ 改进: 保留更多颜色（最少128色，不再降到64色）
+            colors = max(128, 256 - iteration * 32)
             
             # 策略2: 跳帧（如果帧数较多）
             if len(frames) > 20 and iteration > 2:
                 frames = frames[::2]  # 每隔一帧取一帧
                 durations = [d * 2 for d in durations[::2]]
             
-            # 转换颜色模式并保存
+            # ✅ 改进: 使用更好的量化方法
             quantized_frames = []
             for frame in frames:
-                # 转换为P模式（256色）
+                # 转换为P模式
                 if frame.mode != 'P':
-                    frame_p = frame.convert('P', palette=Image.ADAPTIVE, colors=colors)
+                    # 使用method=2（Median Cut算法，质量更好）
+                    frame_p = frame.quantize(colors=colors, method=2)
                 else:
                     frame_p = frame
                 quantized_frames.append(frame_p)
@@ -484,6 +506,78 @@ class EmojiGenerator:
         # 最后检查
         final_size_kb = os.path.getsize(gif_path) / 1024
         logger.warning(f"优化达到最大迭代次数，最终大小: {final_size_kb:.2f}KB")
+    
+    def _optimize_with_gifsicle(
+        self,
+        gif_path: str,
+        target_size_kb: int
+    ) -> bool:
+        """
+        使用gifsicle专业优化GIF
+        
+        Args:
+            gif_path: GIF文件路径
+            target_size_kb: 目标大小（KB）
+            
+        Returns:
+            bool: 是否成功优化
+        """
+        import subprocess
+        import shutil
+        
+        # 检查gifsicle是否可用
+        if not shutil.which('gifsicle'):
+            logger.warning("gifsicle未安装")
+            return False
+        
+        colors = self.config.get("gifsicle_colors", 256)
+        lossy = self.config.get("gifsicle_lossy", 20)
+        
+        # 创建临时文件
+        temp_path = gif_path + ".gifsicle.tmp"
+        
+        try:
+            # 构建gifsicle命令
+            cmd = [
+                'gifsicle',
+                '--optimize=3',           # 最高优化级别
+                f'--lossy={lossy}',       # 有损压缩（20=轻度，保持质量）
+                f'--colors={colors}',     # 保持256色
+                '--careful',              # 仔细处理，保持质量
+                gif_path,
+                '-o', temp_path
+            ]
+            
+            # 执行优化
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                logger.warning(f"gifsicle执行失败: {result.stderr}")
+                return False
+            
+            # 检查优化后的文件
+            if not os.path.exists(temp_path):
+                return False
+            
+            # 替换原文件
+            shutil.move(temp_path, gif_path)
+            return True
+            
+        except subprocess.TimeoutExpired:
+            logger.warning("gifsicle优化超时")
+            return False
+        except Exception as e:
+            logger.warning(f"gifsicle优化异常: {e}")
+            return False
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
     
     def batch_generate(
         self,

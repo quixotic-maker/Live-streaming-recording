@@ -373,9 +373,17 @@ class ScreenRecordingProcessor:
         
         try:
             from paddleocr import PaddleOCR
-            ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
-        except ImportError:
-            print("❌ PaddleOCR 未安装")
+            import logging
+            # 禁用PaddleOCR的详细日志
+            logging.getLogger('ppocr').setLevel(logging.ERROR)
+            ocr = PaddleOCR(lang='ch')
+        except ImportError as e:
+            print(f"❌ PaddleOCR 导入失败: {e}")
+            return []
+        except Exception as e:
+            print(f"❌ PaddleOCR 初始化失败: {e}")
+            import traceback
+            traceback.print_exc()
             return []
         
         danmaku_list = []
@@ -439,6 +447,7 @@ class ScreenRecordingProcessor:
                 input_path: str, 
                 output_dir: str,
                 extract_danmaku: bool = True,
+                skip_crop: bool = False,
                 dry_run: bool = False) -> Dict:
         """
         完整处理流程
@@ -475,11 +484,18 @@ class ScreenRecordingProcessor:
             'success': False
         }
         
-        # 步骤1: 裁剪视频
-        if self.crop_video(input_path, cropped_video, dry_run):
+        # 步骤1: 裁剪视频（如果需要）
+        if skip_crop:
+            # 跳过裁剪，直接使用输入视频
+            print(f"\n⏩ 跳过视频裁剪，直接使用输入视频")
+            cropped_video = input_path
             result['cropped_video'] = cropped_video
         else:
-            return result
+            # 执行裁剪
+            if self.crop_video(input_path, cropped_video, dry_run):
+                result['cropped_video'] = cropped_video
+            else:
+                return result
         
         # 步骤2: 提取弹幕（如果启用）
         if extract_danmaku and self.ocr_enabled and not dry_run:
@@ -517,6 +533,8 @@ def main():
                        help='禁用OCR识别')
     parser.add_argument('--no-danmaku', action='store_true',
                        help='不提取弹幕')
+    parser.add_argument('--skip-crop', action='store_true',
+                       help='跳过视频裁剪，直接使用输入视频进行OCR（适用于已裁剪的视频）')
     parser.add_argument('--dry-run', action='store_true',
                        help='测试模式，不实际执行')
     
@@ -538,6 +556,7 @@ def main():
         args.input,
         args.output,
         extract_danmaku=not args.no_danmaku,
+        skip_crop=args.skip_crop,
         dry_run=args.dry_run
     )
     

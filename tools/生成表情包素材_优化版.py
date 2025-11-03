@@ -33,21 +33,21 @@ config = {
     
     # 优化参数
     "motion_config": {
-        "motion_threshold": 0.08,      # 从0.15降到0.08（更容易检测到）
+        "motion_threshold": 0.05,      # ✅ 方案C: 0.08→0.05（更敏感）
         "min_duration": 1.5,            # 最短1.5秒
         "merge_gap": 2.0                # 合并间隔2秒
     },
     
     "multimodal_config": {
-        "recommend_threshold": 0.4,     # 从0.7降到0.4（更多候选）
+        "recommend_threshold": 0.3,     # ✅ 方案C: 0.4→0.3（更宽松）
         "gesture_weight": 0.5,          # 增加手势权重
         "effect_weight": 0.3            # 增加特效权重
     },
     
     # 测试参数
-    "test_duration": 1800,              # 只分析前30分钟（测试用）
+    "test_duration": None,              # ✅ 修复: 默认分析全视频（不限制时长）
     "max_dance_moments": 10,            # 最多取10个手势舞
-    "max_thank_moments": 30             # 最多取30个感谢表情
+    "max_thank_moments": 50             # ✅ 方案C: 30→50（分析更多候选）
 }
 
 
@@ -109,12 +109,11 @@ class EmojiMaterialGenerator:
         print("\n[步骤1] 加载已有数据")
         print("-" * 70)
         
-        gift_file = os.path.expanduser("~/shanshan_materials/素材库_最新/gift_素材.json")
-        if os.path.exists(gift_file):
-            with open(gift_file, 'r', encoding='utf-8') as f:
-                gift_data = json.load(f)
-            
-            segments = gift_data.get("segments", []) if isinstance(gift_data, dict) else gift_data
+        # ✅ 修复: 健壮的gift数据查找
+        gift_data_loaded = self._find_gift_data_robust()
+        
+        if gift_data_loaded:
+            segments = gift_data_loaded.get("segments", []) if isinstance(gift_data_loaded, dict) else gift_data_loaded
             for item in segments:
                 if isinstance(item, dict) and "谢谢" in item.get("text", ""):
                     self.thank_moments.append({
@@ -125,11 +124,62 @@ class EmojiMaterialGenerator:
             
             print(f"✓ 加载礼物感谢数据: {len(self.thank_moments)}个时刻")
         else:
-            print(f"⚠ 礼物感谢数据文件不存在: {gift_file}")
-            self.thank_moments = [{"time": 132.5, "keyword": "谢谢", "text": "谢谢"}]
+            print(f"⚠ 未找到礼物数据，将仅依赖运动检测")
+            self.thank_moments = []
         
         print(f"\n数据加载完成:")
         print(f"  感谢时刻: {len(self.thank_moments)}个")
+    
+    def _find_gift_data_robust(self):
+        """健壮的礼物数据查找方法"""
+        import re
+        from pathlib import Path
+        
+        # 从视频路径提取日期
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', self.video_path)
+        if not match:
+            print(f"⚠ 无法从视频路径提取日期: {self.video_path}")
+            date = None
+        else:
+            date = match.group(1)
+            print(f"✓ 提取日期: {date}")
+        
+        base_dir = Path.home() / "shanshan_materials"
+        
+        # 优先级1: 当前日期目录
+        if date:
+            priority1_paths = [
+                base_dir / f"03_内容分类/{date}/gift_素材.json",
+                base_dir / f"04_素材生成/{date}/gift/gift_素材.json",
+            ]
+            
+            for path in priority1_paths:
+                if path.exists():
+                    print(f"✓ 找到礼物数据: {path}")
+                    with open(path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+        
+        # 优先级2: 全局素材库（兜底）
+        priority2_paths = [
+            base_dir / "素材库_最新/gift_素材.json",
+            base_dir / "歌曲素材库/gift_素材.json",
+        ]
+        
+        for path in priority2_paths:
+            if path.exists():
+                print(f"⚠ 使用全局素材库: {path}")
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        
+        # 优先级3: 无数据
+        print(f"❌ 未找到任何礼物数据文件")
+        print(f"   尝试过的路径:")
+        if date:
+            print(f"     • 03_内容分类/{date}/gift_素材.json")
+            print(f"     • 04_素材生成/{date}/gift/gift_素材.json")
+        print(f"     • 素材库_最新/gift_素材.json")
+        print(f"     • 歌曲素材库/gift_素材.json")
+        return None
     
     def detect_dance_moments(self):
         """方案A: 检测手势舞"""
@@ -215,12 +265,13 @@ class EmojiMaterialGenerator:
         self.thank_moments = analyzed_moments
     
     def generate_emojis(self):
-        """生成表情包"""
+        """生成表情包（直接输出到output_dir）"""
         print("\n[步骤4] 生成表情包")
         print("-" * 70)
         
-        temp_path = Path(self.temp_dir)
-        temp_path.mkdir(parents=True, exist_ok=True)
+        # ✅ 直接使用output_dir，不再使用temp_dir
+        output_path = Path(self.output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
         
         all_candidates = []
         
@@ -230,7 +281,7 @@ class EmojiMaterialGenerator:
             all_candidates.append({
                 "start": moment["start"],
                 "end": moment["end"],
-                "type": "hand_dance",
+                "type": "cute",  # 改用"cute"分类，更通用
                 "gesture_type": moment.get("gesture_type", "dance")
             })
         
@@ -250,8 +301,8 @@ class EmojiMaterialGenerator:
             return
         
         print(f"准备生成 {len(all_candidates)} 个表情包")
-        print("每个表情包生成3种规格（240x240, 300x300, 512x512）")
-        print(f"预计生成 {len(all_candidates) * 3} 个GIF文件")
+        print("每个表情包生成3种规格（240x240, 300x300, 512x512）+ 1个静态图")
+        print(f"预计生成 {len(all_candidates) * 4} 个文件")
         print()
         
         for i, candidate in enumerate(all_candidates, 1):
@@ -261,11 +312,12 @@ class EmojiMaterialGenerator:
                 emoji_type = candidate["type"]
                 base_name = f"emoji_{emoji_type}_{i:03d}"
                 
+                # ✅ 直接输出到output_dir根目录（不再创建子目录）
                 result = self.emoji_generator.generate_multi_specs(
                     video_path=self.video_path,
                     start=candidate["start"],
                     end=candidate["end"],
-                    output_dir=str(temp_path / emoji_type),
+                    output_dir=str(output_path),  # 直接使用output_dir
                     base_name=base_name
                 )
                 
@@ -279,6 +331,7 @@ class EmojiMaterialGenerator:
                 print(f" ✗ 失败: {e}")
         
         print(f"\n✓ 表情包生成完成: {len(self.all_emojis)}个")
+        print(f"   输出目录: {output_path}")
     
     def organize_emojis(self):
         """分类存储表情包（已禁用 - 使用简化结构）"""
