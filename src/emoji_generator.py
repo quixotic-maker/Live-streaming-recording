@@ -71,7 +71,9 @@ class EmojiGenerator:
             "hd_size": (1920, 1080),       # 高清图片尺寸
             "use_gifsicle": True,           # 使用gifsicle专业优化
             "gifsicle_colors": 256,         # gifsicle颜色数（保持最大）
-            "gifsicle_lossy": 20            # gifsicle有损压缩级别（0-200，20=轻度）
+            "gifsicle_lossy": 20,           # gifsicle有损压缩级别（0-200，20=轻度）- 回退
+            "generate_webp": True,          # 同时生成WebP格式（真彩色）
+            "webp_quality": 90              # WebP质量（0-100，90=高质量）
         }
         
         self.config = {**default_config, **(config or {})}
@@ -219,7 +221,63 @@ class EmojiGenerator:
         
         logger.info(f"GIF创建完成: {file_size_kb:.2f}KB")
         
+        # ✅ 新增: 同时生成WebP格式
+        if self.config.get("generate_webp", False):
+            webp_result = self._create_webp(pil_frames, output_path, duration_ms)
+            if webp_result:
+                result["webp"] = webp_result
+        
         return result
+    
+    def _create_webp(
+        self,
+        pil_frames: List,
+        gif_path: str,
+        duration_ms: int
+    ) -> Dict:
+        """
+        创建WebP动图（真彩色）
+        
+        Args:
+            pil_frames: PIL图像帧列表
+            gif_path: GIF文件路径（用于生成WebP路径）
+            duration_ms: 每帧持续时间（毫秒）
+            
+        Returns:
+            WebP创建结果
+        """
+        try:
+            # 生成WebP路径
+            webp_path = gif_path.replace('.gif', '.webp')
+            
+            # 保存为WebP
+            quality = self.config.get("webp_quality", 90)
+            
+            pil_frames[0].save(
+                webp_path,
+                save_all=True,
+                append_images=pil_frames[1:],
+                duration=duration_ms,
+                loop=0,
+                quality=quality,
+                method=6  # 最佳压缩
+            )
+            
+            # 检查文件大小
+            webp_size_kb = os.path.getsize(webp_path) / 1024
+            
+            logger.info(f"✅ WebP生成: {webp_size_kb:.1f}KB (真彩色)")
+            
+            return {
+                "path": webp_path,
+                "file_size_kb": webp_size_kb,
+                "format": "webp",
+                "colors": "true_color"
+            }
+            
+        except Exception as e:
+            logger.warning(f"WebP生成失败: {e}")
+            return None
     
     def create_static_image(
         self,
