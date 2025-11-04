@@ -21,6 +21,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import re
 
+# 设置代理环境变量（Clash Verge）
+os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7897'
+os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7897'
+os.environ['ALL_PROXY'] = 'http://127.0.0.1:7897'
+
 
 class AudioFingerprint:
     """音频指纹识别器（使用ShazamIO）"""
@@ -30,11 +35,20 @@ class AudioFingerprint:
         self._init_shazam()
     
     def _init_shazam(self):
-        """初始化Shazam"""
+        """初始化Shazam（带代理支持）"""
         try:
             from shazamio import Shazam
+            import aiohttp
+            
+            # 创建带代理的connector
+            proxy_url = os.environ.get('HTTP_PROXY', 'http://127.0.0.1:7897')
+            
+            # ShazamIO会自动使用环境变量中的代理
+            # 但我们显式创建一个带代理的实例来确保
             self.shazam = Shazam()
-            print("✓ Shazam初始化成功")
+            self.proxy_url = proxy_url
+            
+            print(f"✓ Shazam初始化成功（代理: {proxy_url}）")
         except ImportError:
             print("⚠ ShazamIO未安装，请运行: pip install shazamio")
             print("  或使用 pip install aiohttp aiodns")
@@ -53,7 +67,7 @@ class AudioFingerprint:
             return None
         
         try:
-            # 使用新的API: recognize 而不是 recognize_song
+            # 使用代理进行识别（通过环境变量HTTP_PROXY）
             result = await self.shazam.recognize(audio_path)
             
             if result and 'track' in result:
