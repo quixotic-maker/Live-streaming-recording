@@ -623,7 +623,8 @@ class IntegratedRecognitionSystem:
     """集成识别系统"""
     
     def __init__(self, video_path: str, song_list_path: str, 
-                 transcript_path: str, danmaku_path: Optional[str] = None):
+                 transcript_path: str, danmaku_path: Optional[str] = None,
+                 output_path: Optional[str] = None):
         """
         初始化集成识别系统
         
@@ -632,11 +633,13 @@ class IntegratedRecognitionSystem:
             song_list_path: 歌曲列表JSON路径
             transcript_path: Whisper转录JSON路径
             danmaku_path: 弹幕JSON路径（可选）
+            output_path: 输出文件路径（可选）
         """
         self.video_path = video_path
         self.song_list_path = song_list_path
         self.transcript_path = transcript_path
         self.danmaku_path = danmaku_path
+        self.output_path = output_path
         
         # 加载数据
         self.songs = self._load_songs()
@@ -878,14 +881,23 @@ class IntegratedRecognitionSystem:
             print(f"剩余未识别: {len(unknown_songs)} 首")
             print("正在生成人工标注页面...")
             
+            # 将manual_annotation.html保存到与输出文件相同的目录
+            if hasattr(self, 'output_path') and self.output_path:
+                annotation_html = os.path.join(
+                    os.path.dirname(self.output_path),
+                    'manual_annotation.html'
+                )
+            else:
+                annotation_html = os.path.expanduser('~/shanshan_materials/manual_annotation.html')
+            
             self.annotator.generate_html_player(
                 unknown_songs,
-                'manual_annotation.html'
+                annotation_html
             )
             
             print()
             print("请按以下步骤完成人工标注：")
-            print(f"  1. 打开浏览器访问: ~/shanshan_materials/manual_annotation.html")
+            print(f"  1. 打开浏览器访问: {annotation_html}")
             print(f"  2. 逐首听歌并填写歌名")
             print(f"  3. 点击'导出结果'按钮")
             print(f"  4. 将导出的 manual_annotations.json 放到项目根目录")
@@ -928,13 +940,15 @@ class IntegratedRecognitionSystem:
             }
             print(f"  {source_names.get(source, source)}: {count} 首")
         
-        # 保存结果
-        output_path = os.path.expanduser("~/shanshan_materials/recognition_results.json")
-        with open(output_path, 'w', encoding='utf-8') as f:
+        # 保存结果（使用命令行参数指定的路径）
+        if not hasattr(self, 'output_path') or not self.output_path:
+            self.output_path = os.path.expanduser("~/shanshan_materials/recognition_results.json")
+        
+        with open(self.output_path, 'w', encoding='utf-8') as f:
             json.dump(self.recognition_results, f, ensure_ascii=False, indent=2)
         
         print()
-        print(f"✓ 识别结果已保存: {output_path}")
+        print(f"✓ 识别结果已保存: {self.output_path}")
         
         if unknown > 0:
             print()
@@ -981,17 +995,13 @@ async def main():
         video_path,
         song_list_path,
         transcript_path,
-        danmaku_path
+        danmaku_path,
+        output_path  # 传递输出路径
     )
     
     results = await system.recognize_all()
     
-    # 保存结果
-    if output_path and results:
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-        print(f"\n✅ 识别结果已保存: {output_path}")
+    # 结果已在_generate_report中保存，这里不需要重复保存
 
 
 if __name__ == "__main__":

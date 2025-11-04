@@ -23,19 +23,22 @@ from datetime import datetime
 class KeyFrameExtractor:
     """关键帧提取器"""
     
-    def __init__(self, video_path: str, output_dir: str, quality: int = 95):
+    def __init__(self, video_path: str, output_dir: str, quality: int = 95, 
+                 format: str = 'png'):
         """
         初始化提取器
         
         Args:
             video_path: 视频文件路径
             output_dir: 输出目录
-            quality: JPEG质量（1-100，默认95）
+            quality: JPEG质量（1-100，默认95）或PNG压缩（0-9，默认3）
+            format: 输出格式 'png'（推荐，无损） 或 'jpg'（默认png）
         """
         self.video_path = video_path
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.quality = quality
+        self.format = format.lower()
         
         # 打开视频
         self.cap = cv2.VideoCapture(video_path)
@@ -83,11 +86,17 @@ class KeyFrameExtractor:
                 break
             
             timestamp = frame_num / self.fps
-            filename = f"screenshot_{int(timestamp):06d}s.jpg"
+            
+            # 使用指定格式
+            ext = 'png' if self.format == 'png' else 'jpg'
+            filename = f"screenshot_{int(timestamp):06d}s.{ext}"
             filepath = output_subdir / filename
             
+            # 锐化处理（可选，提升清晰度）
+            sharpened_frame = self._sharpen_frame(frame)
+            
             # 保存截图
-            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality or self.quality])
+            self._save_image(str(filepath), sharpened_frame, quality or self.quality)
             
             screenshots.append({
                 "time": timestamp,
@@ -145,10 +154,13 @@ class KeyFrameExtractor:
                 if (diff_score > threshold and 
                     timestamp - last_screenshot_time >= min_interval):
                     
-                    filename = f"scene_{int(timestamp):06d}s_diff{diff_score:.1f}.jpg"
+                    ext = 'png' if self.format == 'png' else 'jpg'
+                    filename = f"scene_{int(timestamp):06d}s_diff{diff_score:.1f}.{ext}"
                     filepath = output_subdir / filename
                     
-                    cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality or self.quality])
+                    # 锐化并保存
+                    sharpened_frame = self._sharpen_frame(frame)
+                    self._save_image(str(filepath), sharpened_frame, quality or self.quality)
                     
                     screenshots.append({
                         "time": timestamp,
@@ -206,10 +218,13 @@ class KeyFrameExtractor:
             
             # 清理文件名
             safe_label = "".join(c if c.isalnum() or c in "._- " else "_" for c in label)
-            filename = f"{int(timestamp):06d}s_{safe_label}.jpg"
+            ext = 'png' if self.format == 'png' else 'jpg'
+            filename = f"{int(timestamp):06d}s_{safe_label}.{ext}"
             filepath = output_subdir / filename
             
-            cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, quality or self.quality])
+            # 锐化并保存
+            sharpened_frame = self._sharpen_frame(frame)
+            self._save_image(str(filepath), sharpened_frame, quality or self.quality)
             
             screenshots.append({
                 "time": timestamp,
@@ -337,6 +352,42 @@ class KeyFrameExtractor:
         
         print(f"✓ 文本索引: {txt_path}")
     
+    def _sharpen_frame(self, frame: np.ndarray) -> np.ndarray:
+        """
+        锐化处理，提升图片清晰度
+        
+        Args:
+            frame: 输入帧
+        
+        Returns:
+            锐化后的帧
+        """
+        # 锐化核
+        kernel = np.array([[-1, -1, -1],
+                          [-1,  9, -1],
+                          [-1, -1, -1]])
+        sharpened = cv2.filter2D(frame, -1, kernel)
+        return sharpened
+    
+    def _save_image(self, filepath: str, frame: np.ndarray, quality: int):
+        """
+        保存图片（支持PNG和JPEG）
+        
+        Args:
+            filepath: 输出文件路径
+            frame: 图片帧
+            quality: 质量参数
+        """
+        if self.format == 'png':
+            # PNG格式：无损压缩，quality为压缩级别0-9
+            # 0=无压缩（最快），9=最大压缩（最慢）
+            # 默认3是一个不错的平衡点
+            png_compression = min(9, max(0, 9 - quality // 10))  # 质量95 → 压缩0
+            cv2.imwrite(filepath, frame, [cv2.IMWRITE_PNG_COMPRESSION, png_compression])
+        else:
+            # JPEG格式：有损压缩，quality为1-100
+            cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    
     def close(self):
         """释放资源"""
         self.cap.release()
@@ -389,10 +440,12 @@ def main():
     parser.add_argument('--video', type=str, help='视频文件路径')
     parser.add_argument('--output', type=str, help='输出目录')
     parser.add_argument('--material_dir', type=str, help='素材目录（用于模式3）')
-    parser.add_argument('--mode', type=str, default='1', 
-                       help='提取模式: 1=固定间隔, 2=场景变化, 3=素材时间点, 4=全部 (默认1)')
-    parser.add_argument('--interval', type=int, default=30, help='固定间隔（秒，默认30）')
-    parser.add_argument('--quality', type=int, default=95, help='JPEG质量（1-100，默认95）')
+    parser.add_argument('--mode', type=str, default='4', 
+                       help='提取模式: 1=固定间隔, 2=场景变化, 3=素材时间点, 4=全部 (默认4-混合模式)')
+    parser.add_argument('--interval', type=int, default=10, help='固定间隔（秒，默认10，提升到10获得更多关键帧）')
+    parser.add_argument('--quality', type=int, default=95, help='图片质量（1-100，默认95）')
+    parser.add_argument('--format', type=str, default='png', choices=['png', 'jpg'],
+                       help='输出格式: png=无损（推荐），jpg=有损（默认png）')
     args = parser.parse_args()
     
     print("=" * 70)
@@ -412,10 +465,12 @@ def main():
     
     print(f"\n视频文件: {video_path}")
     print(f"输出目录: {output_dir}")
-    print(f"提取模式: {args.mode}\n")
+    print(f"提取模式: {args.mode}")
+    print(f"输出格式: {args.format.upper()}")
+    print(f"固定间隔: {args.interval}秒\n")
     
     # 创建提取器
-    extractor = KeyFrameExtractor(video_path, output_dir, quality=args.quality)
+    extractor = KeyFrameExtractor(video_path, output_dir, quality=args.quality, format=args.format)
     
     all_screenshots = []
     
