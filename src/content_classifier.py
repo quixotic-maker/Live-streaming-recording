@@ -99,23 +99,29 @@ class ContentClassifier:
     
     def _is_singing(self, text: str, duration: float) -> bool:
         """
-        判断是否是唱歌
+        判断是否是唱歌（优化版，降低阈值）
         
         特征：
         1. 文字内容符合歌词模式
-        2. 持续时间较长（>10秒）
-        3. 包含大量拟声词
-        4. 文字很长（>50字）通常是连续歌词
+        2. 持续时间较长
+        3. 包含拟声词或歌词特征
+        4. 排除明确的聊天内容
         """
-        # 短句不太可能是唱歌（但英文歌词可以很短）
-        if len(text) < 5:
+        text = text.strip()
+        
+        # 空文本
+        if not text:
+            return False
+        
+        # ✅ 降低最小长度: 5 → 3
+        if len(text) < 3:
             return False
         
         # ✅ 排除：提到歌曲但不是在唱（聊天内容）
         chat_about_song_patterns = [
             '这首歌', '那首歌', '唱首', '唱一首', '来唱', '我们唱', '下一首',
-            '点歌', '点首', '要听', '想听', '什么歌', '歌名', '好听',
-            '叫什么', '是什么', '叫《', '歌叫', '来个', '我会', '我不会'
+            '点歌', '点首', '要听', '想听', '什么歌', '歌名', '好听吗',
+            '叫什么', '是什么', '叫《', '歌叫', '来个', '我会唱', '我不会', '会不会'
         ]
         if any(p in text for p in chat_about_song_patterns):
             return False
@@ -124,19 +130,28 @@ class ContentClassifier:
         if '？' in text or ('吗' in text and len(text) < 30):
             return False
         
-        # ✅ 长文本（>80字）且无聊天特征 = 很可能是歌词
-        if len(text) > 80:
+        # ✅ 降低长文本阈值: 80 → 50
+        if len(text) > 50:
             return True
         
-        # ✅ 持续时间很长（>45秒）且文字不短 = 可能是唱歌
-        if duration > 45 and len(text) > 20:
+        # ✅ 降低时长阈值: 45s → 30s
+        if duration > 30 and len(text) > 15:
             return True
         
-        # ✅ 持续时间较长 + 文字较长 = 可能是唱歌（阈值提高）
-        if duration > 20 and len(text) > 40:
+        # ✅ 降低组合阈值: 20s+40字 → 15s+25字
+        if duration > 15 and len(text) > 25:
             return True
         
-        # ✅ 新增：重复词模式（"kiss kiss", "yeah yeah", "baby baby"）
+        # ✅ 新增: 短时长+歌词特征
+        if duration > 8 and len(text) > 15:
+            if self._has_lyric_patterns(text):
+                return True
+        
+        # ✅ 新增: 中等时长+一定文字量
+        if duration > 10 and len(text) > 20:
+            return True
+        
+        # ✅ 保持: 重复词模式（"kiss kiss", "yeah yeah", "baby baby"）
         words = text.lower().split()
         if len(words) >= 2:
             # 计算重复词数量
@@ -147,22 +162,33 @@ class ContentClassifier:
             if repeated_words / len(word_counts) >= 0.4:
                 return True
         
-        # 检查歌词模式
+        # ✅ 保持: 检查歌词正则模式
         for pattern in self.song_patterns:
             if re.search(pattern, text):
                 return True
         
-        # 检查是否包含过多拟声词（歌曲特征）
+        # ✅ 保持: 检查拟声词
         vocal_sounds = len(re.findall(r'[啊呜哦嗯唉]{2,}', text))
         if vocal_sounds >= 2:
             return True
         
-        # ❌ 移除：这个太激进，"这首歌很好听"也会匹配
-        # song_keywords = ['歌', '唱', '这首', '翻唱', '点歌']
-        # if any(k in text for k in song_keywords):
-        #     return True
+        # ✅ 新增: 音符符号
+        if '♪' in text or '🎵' in text or '🎶' in text:
+            return True
         
         return False
+    
+    def _has_lyric_patterns(self, text: str) -> bool:
+        """检查是否有歌词特征"""
+        patterns = [
+            r'你.{1,5}我',  # 你...我
+            r'爱.{1,5}心',  # 爱...心
+            r'[的了着过]{3,}',  # 连续虚词
+            r'(啦|呀|哇|吧){2,}',  # 语气词重复
+            r'想.{1,5}你',  # 想...你
+            r'(oh|yeah|baby|love).{1,10}(oh|yeah|baby|love)',  # 英文歌词模式
+        ]
+        return any(re.search(p, text, re.IGNORECASE) for p in patterns)
     
     def _is_daily(self, text: str) -> bool:
         """判断是否是日常活动"""
@@ -245,15 +271,15 @@ class ContentClassifier:
     def _post_process_singing(
         self, 
         classified: Dict[str, List[Dict]], 
-        min_duration: float = 5.0,
+        min_duration: float = 3.0,  # ✅ 降低: 5秒 → 3秒
         merge_gap: float = 10.0
     ) -> Dict[str, List[Dict]]:
         """
-        后处理singing片段：过滤短片段、合并连续片段
+        后处理singing片段：过滤短片段、合并连续片段（优化版）
         
         Args:
             classified: 原始分类结果
-            min_duration: 最小片段长度（秒），默认5秒
+            min_duration: 最小片段长度（秒），默认3秒（降低以保留更多片段）
             merge_gap: 合并间隔（秒），默认10秒
             
         Returns:
