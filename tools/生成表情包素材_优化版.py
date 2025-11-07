@@ -46,8 +46,11 @@ config = {
     
     # 测试参数
     "test_duration": None,              # ✅ 修复: 默认分析全视频（不限制时长）
-    "max_dance_moments": 15,            # 最多取15个手势舞（增加）
-    "max_thank_moments": 80             # ✅ 进一步增加: 50→80（分析更多候选）
+    "max_dance_moments": 999999,        # ✅ 不限制数量（供人工标注）
+    "max_thank_moments": 999999,        # ✅ 不限制数量（供人工标注）
+    "max_sing_moments": 999999,         # ✅ 新增：唱歌表情包
+    "max_chat_moments": 999999,         # ✅ 新增：聊天表情包
+    "max_upgrade_moments": 999999       # ✅ 新增：升级表情包
 }
 
 
@@ -77,6 +80,9 @@ class EmojiMaterialGenerator:
         
         self.dance_moments = []
         self.thank_moments = []
+        self.sing_moments = []      # ✅ 新增：唱歌表情包
+        self.chat_moments = []      # ✅ 新增：聊天表情包
+        self.upgrade_moments = []   # ✅ 新增：升级表情包
         self.all_emojis = []
         
         print("=" * 70)
@@ -127,8 +133,49 @@ class EmojiMaterialGenerator:
             print(f"⚠ 未找到礼物数据，将仅依赖运动检测")
             self.thank_moments = []
         
+        # ✅ 新增：加载唱歌数据
+        singing_data = self._load_singing_data()
+        if singing_data:
+            segments = singing_data.get("segments", []) if isinstance(singing_data, dict) else singing_data
+            for item in segments[:20]:  # 每首歌取1-2个高潮片段
+                if isinstance(item, dict):
+                    self.sing_moments.append({
+                        "start": item.get("start", 0),
+                        "end": item.get("end", item.get("start", 0) + 3),
+                        "song": item.get("title", "unknown")
+                    })
+            print(f"✓ 加载唱歌数据: {len(self.sing_moments)}个时刻")
+        else:
+            print(f"⚠ 未找到唱歌数据")
+        
+        # ✅ 新增：加载聊天数据（从Whisper转录）
+        chat_data = self._load_chat_data()
+        if chat_data:
+            print(f"✓ 加载聊天数据: {len(chat_data)}个时刻")
+            self.chat_moments = chat_data[:50]  # 取前50个有趣对话
+        else:
+            print(f"⚠ 未找到聊天数据")
+        
+        # ✅ 新增：加载升级数据
+        upgrade_data = self._load_upgrade_data()
+        if upgrade_data:
+            segments = upgrade_data.get("segments", []) if isinstance(upgrade_data, dict) else upgrade_data
+            for item in segments:
+                if isinstance(item, dict):
+                    self.upgrade_moments.append({
+                        "start": item.get("start", 0),
+                        "end": item.get("end", item.get("start", 0) + 3),
+                        "level": item.get("level", "unknown")
+                    })
+            print(f"✓ 加载升级数据: {len(self.upgrade_moments)}个时刻")
+        else:
+            print(f"⚠ 未找到升级数据")
+        
         print(f"\n数据加载完成:")
         print(f"  感谢时刻: {len(self.thank_moments)}个")
+        print(f"  唱歌时刻: {len(self.sing_moments)}个")
+        print(f"  聊天时刻: {len(self.chat_moments)}个")
+        print(f"  升级时刻: {len(self.upgrade_moments)}个")
     
     def _find_gift_data_robust(self):
         """健壮的礼物数据查找方法"""
@@ -179,6 +226,108 @@ class EmojiMaterialGenerator:
             print(f"     • 04_素材生成/{date}/gift/gift_素材.json")
         print(f"     • 素材库_最新/gift_素材.json")
         print(f"     • 歌曲素材库/gift_素材.json")
+        return None
+    
+    def _load_singing_data(self):
+        """加载唱歌数据"""
+        import re
+        from pathlib import Path
+        
+        # 从视频路径提取日期
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', self.video_path)
+        if not match:
+            return None
+        
+        date = match.group(1)
+        base_dir = Path.home() / "shanshan_materials"
+        
+        # 查找singing_素材.json
+        paths = [
+            base_dir / f"03_内容分类/{date}/singing_素材.json",
+            base_dir / f"03_内容分类/{date}/singing_素材_fingerprint.json",
+        ]
+        
+        for path in paths:
+            if path.exists():
+                print(f"✓ 找到唱歌数据: {path}")
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                except:
+                    pass
+        
+        return None
+    
+    def _load_chat_data(self):
+        """加载聊天数据（从Whisper转录提取有趣对话）"""
+        import re
+        from pathlib import Path
+        
+        # 从视频路径提取日期
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', self.video_path)
+        if not match:
+            return []
+        
+        date = match.group(1)
+        base_dir = Path.home() / "shanshan_materials"
+        
+        # 查找Whisper转录文件
+        transcript_path = base_dir / f"02_转文字结果/{date}"
+        if not transcript_path.exists():
+            return []
+        
+        # 查找json文件
+        json_files = list(transcript_path.glob("*_transcript.json"))
+        if not json_files:
+            return []
+        
+        try:
+            with open(json_files[0], 'r', encoding='utf-8') as f:
+                transcript = json.load(f)
+            
+            # 提取包含问号、感叹号的对话（可能是有趣互动）
+            chat_moments = []
+            for segment in transcript.get("segments", []):
+                text = segment.get("text", "")
+                if ("?" in text or "？" in text or "!" in text or "！" in text) and len(text) > 5:
+                    chat_moments.append({
+                        "start": segment.get("start", 0),
+                        "end": segment.get("end", segment.get("start", 0) + 3),
+                        "text": text
+                    })
+            
+            return chat_moments[:50]  # 返回前50个
+        except:
+            return []
+    
+    def _load_upgrade_data(self):
+        """加载升级数据"""
+        import re
+        from pathlib import Path
+        
+        # 从视频路径提取日期
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', self.video_path)
+        if not match:
+            return None
+        
+        date = match.group(1)
+        base_dir = Path.home() / "shanshan_materials"
+        
+        # 查找upgrade_素材.json
+        paths = [
+            base_dir / f"03_内容分类/{date}/upgrade_素材.json",
+            base_dir / f"04_素材生成/{date}/upgrade/upgrade_素材.json",
+        ]
+        
+        for path in paths:
+            if path.exists():
+                print(f"✓ 找到升级数据: {path}")
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                except:
+                    pass
+        
         return None
     
     def detect_dance_moments(self):
@@ -273,6 +422,36 @@ class EmojiMaterialGenerator:
                 "end": moment["end"],
                 "type": "thank",
                 "gesture_type": "thank"
+            })
+        
+        # ✅ 新增：添加唱歌表情
+        max_sing = self.config.get("max_sing_moments", 999999)
+        for moment in self.sing_moments[:max_sing]:
+            all_candidates.append({
+                "start": moment["start"],
+                "end": moment["end"],
+                "type": "sing",
+                "gesture_type": "sing"
+            })
+        
+        # ✅ 新增：添加聊天表情
+        max_chat = self.config.get("max_chat_moments", 999999)
+        for moment in self.chat_moments[:max_chat]:
+            all_candidates.append({
+                "start": moment["start"],
+                "end": moment["end"],
+                "type": "chat",
+                "gesture_type": "chat"
+            })
+        
+        # ✅ 新增：添加升级表情
+        max_upgrade = self.config.get("max_upgrade_moments", 999999)
+        for moment in self.upgrade_moments[:max_upgrade]:
+            all_candidates.append({
+                "start": moment["start"],
+                "end": moment["end"],
+                "type": "upgrade",
+                "gesture_type": "upgrade"
             })
         
         if len(all_candidates) == 0:
