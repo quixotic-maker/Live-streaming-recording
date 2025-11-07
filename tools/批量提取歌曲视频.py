@@ -222,26 +222,38 @@ class SongVideoExtractor:
             ]
             
             subtitle_file = None
+            subtitle_format = None
             for name in possible_names:
                 path = os.path.join(lyrics_dir, name)
                 if os.path.exists(path):
                     subtitle_file = path
+                    subtitle_format = 'ass' if name.endswith('.ass') else 'srt'
                     break
             
             if not subtitle_file:
                 print(f"  ⚠ 未找到歌词文件，跳过字幕")
                 return
             
+            # ✅ 调整字幕时间轴（关键修复）
+            print(f"  → 调整字幕时间轴（偏移 -{video_start:.2f}秒）...")
+            adjusted_subtitle = self._adjust_subtitle_timing(
+                subtitle_file,
+                subtitle_format,
+                -video_start  # 负偏移：将时间戳向前移动
+            )
+            
+            if not adjusted_subtitle:
+                print(f"  ⚠ 时间轴调整失败，跳过字幕")
+                return
+            
             # 生成带字幕的视频
             output_with_sub = video_path.replace('.mp4', '_字幕版.mp4')
             
-            # 调整字幕时间轴（歌词是从0开始，需要减去video_start）
-            # 这里简化处理，实际需要修改字幕文件的时间戳
-            
+            # ✅ 使用调整后的字幕文件
             cmd = [
                 'ffmpeg',
                 '-i', video_path,
-                '-vf', f"subtitles={subtitle_file}",
+                '-vf', f"subtitles={adjusted_subtitle}",
                 '-c:a', 'copy',
                 '-y',
                 output_with_sub
@@ -254,11 +266,147 @@ class SongVideoExtractor:
                 timeout=600
             )
             
+            # 清理临时字幕文件
+            try:
+                os.remove(adjusted_subtitle)
+            except:
+                pass
+            
             if result.returncode == 0:
                 print(f"  ✓ 字幕版: {os.path.basename(output_with_sub)}")
+            else:
+                print(f"  ⚠ FFmpeg失败: {result.stderr[:200]}")
             
         except Exception as e:
             print(f"  ⚠ 添加字幕失败: {e}")
+    
+    def _adjust_subtitle_timing(self, subtitle_file: str, format: str, offset: float) -> Optional[str]:
+        """
+        调整字幕时间轴
+        
+        Args:
+            subtitle_file: 原始字幕文件
+            format: 字幕格式 ('ass' or 'srt')
+            offset: 时间偏移（秒）
+        
+        Returns:
+            调整后的临时字幕文件路径
+        """
+        try:
+            import re
+            import tempfile
+            
+            with open(subtitle_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            adjusted_lines = []
+            
+            if format == 'ass':
+                # ASS格式: Dialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,歌词
+                for line in lines:
+                    if line.startswith('Dialogue:'):
+                        # 提取时间戳
+                        parts = line.split(',', 9)
+                        if len(parts) >= 10:
+                            start_time = parts[1]
+                            end_time = parts[2]
+                            
+                            # 调整时间
+                            new_start = self._adjust_ass_time(start_time, offset)
+                            new_end = self._adjust_ass_time(end_time, offset)
+                            
+                            # 重构行
+                            parts[1] = new_start
+                            parts[2] = new_end
+                            adjusted_lines.append(','.join(parts))
+                        else:
+                            adjusted_lines.append(line)
+                    else:
+                        adjusted_lines.append(line)
+            
+            elif format == 'srt':
+                # SRT格式: 00:00:00,000 --> 00:00:05,000
+                time_pattern = re.compile(r'(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})')
+                for line in lines:
+                    match = time_pattern.match(line)
+                    if match:
+                        start_time = match.group(1)
+                        end_time = match.group(2)
+                        
+                        # 调整时间
+                        new_start = self._adjust_srt_time(start_time, offset)
+                        new_end = self._adjust_srt_time(end_time, offset)
+                        
+                        adjusted_lines.append(f"{new_start} --> {new_end}\n")
+                    else:
+                        adjusted_lines.append(line)
+            
+            # 写入临时文件
+            temp_fd, temp_path = tempfile.mkstemp(suffix=f'.{format}', text=True)
+            with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+                f.writelines(adjusted_lines)
+            
+            return temp_path
+            
+        except Exception as e:
+            print(f"  ⚠ 时间轴调整失败: {e}")
+            return None
+    
+    def _adjust_ass_time(self, time_str: str, offset: float) -> str:
+        """
+        调整ASS格式时间戳
+        格式: 0:00:00.00
+        """
+        try:
+            # 解析时间
+            parts = time_str.split(':')
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = float(parts[2])
+            
+            # 转换为总秒数
+            total_seconds = hours * 3600 + minutes * 60 + seconds
+            
+            # 应用偏移
+            new_seconds = max(0, total_seconds + offset)  # 不能小于0
+            
+            # 转换回格式
+            new_hours = int(new_seconds // 3600)
+            new_minutes = int((new_seconds % 3600) // 60)
+            new_secs = new_seconds % 60
+            
+            return f"{new_hours}:{new_minutes:02d}:{new_secs:05.2f}"
+            
+        except:
+            return time_str
+    
+    def _adjust_srt_time(self, time_str: str, offset: float) -> str:
+        """
+        调整SRT格式时间戳
+        格式: 00:00:00,000
+        """
+        try:
+            # 解析时间 (00:00:00,000)
+            time_part, ms_part = time_str.split(',')
+            h, m, s = map(int, time_part.split(':'))
+            ms = int(ms_part)
+            
+            # 转换为总毫秒数
+            total_ms = (h * 3600 + m * 60 + s) * 1000 + ms
+            
+            # 应用偏移（秒转毫秒）
+            new_ms = max(0, total_ms + int(offset * 1000))
+            
+            # 转换回格式
+            new_h = new_ms // 3600000
+            new_m = (new_ms % 3600000) // 60000
+            new_s = (new_ms % 60000) // 1000
+            new_ms_part = new_ms % 1000
+            
+            return f"{new_h:02d}:{new_m:02d}:{new_s:02d},{new_ms_part:03d}"
+            
+        except:
+            return time_str
     
     def _sanitize_filename(self, name: str) -> str:
         """生成安全的文件名"""
