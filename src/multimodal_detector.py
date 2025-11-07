@@ -419,14 +419,14 @@ class MultimodalDetector:
         for i in range(1, len(sorted_times)):
             t = sorted_times[i]
             
-            # 如果与上一个时刻间隔小于3秒，合并
-            if t - current_segment["end"] <= 3:
+            # 如果与上一个时刻间隔小于8秒，合并（延长GIF时长）
+            if t - current_segment["end"] <= 8:
                 current_segment["end"] = t
                 current_segment["scores"].append(timeline[t]["score"])
                 current_segment["sources"].update(timeline[t]["sources"])
             else:
                 # 保存当前片段
-                if len(current_segment["scores"]) >= 3:  # 至少3秒
+                if len(current_segment["scores"]) >= 8:  # 至少8秒
                     avg_score = sum(current_segment["scores"]) / len(current_segment["scores"])
                     highlights.append((
                         current_segment["start"],
@@ -448,7 +448,7 @@ class MultimodalDetector:
                 }
         
         # 添加最后一个片段
-        if len(current_segment["scores"]) >= 3:
+        if len(current_segment["scores"]) >= 8:  # 至少8秒
             avg_score = sum(current_segment["scores"]) / len(current_segment["scores"])
             highlights.append((
                 current_segment["start"],

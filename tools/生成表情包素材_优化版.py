@@ -33,21 +33,21 @@ config = {
     
     # 优化参数
     "motion_config": {
-        "motion_threshold": 0.05,      # ✅ 方案C: 0.08→0.05（更敏感）
+        "motion_threshold": 0.03,      # ✅ 进一步降低: 0.05→0.03（更敏感）
         "min_duration": 1.5,            # 最短1.5秒
         "merge_gap": 2.0                # 合并间隔2秒
     },
     
     "multimodal_config": {
-        "recommend_threshold": 0.3,     # ✅ 方案C: 0.4→0.3（更宽松）
+        "recommend_threshold": 0.2,     # ✅ 进一步降低: 0.3→0.2（更宽松）
         "gesture_weight": 0.5,          # 增加手势权重
         "effect_weight": 0.3            # 增加特效权重
     },
     
     # 测试参数
     "test_duration": None,              # ✅ 修复: 默认分析全视频（不限制时长）
-    "max_dance_moments": 10,            # 最多取10个手势舞
-    "max_thank_moments": 50             # ✅ 方案C: 30→50（分析更多候选）
+    "max_dance_moments": 15,            # 最多取15个手势舞（增加）
+    "max_thank_moments": 80             # ✅ 进一步增加: 50→80（分析更多候选）
 }
 
 
@@ -216,51 +216,31 @@ class EmojiMaterialGenerator:
             print("  3. 可以手动指定时间段进行测试")
     
     def analyze_thank_moments(self):
-        """方案C: 多模态检测 - 分析感谢时刻"""
-        print("\n[步骤3] 方案C: 多模态检测 - 分析感谢时刻")
+        """方案E: 保留所有候选（跳过多模态推荐过滤）"""
+        print("\n[步骤3] 方案E: 保留所有候选时刻（供人工标注和AI学习）")
         print("-" * 70)
         
         max_moments = self.config.get("max_thank_moments", 50)
-        moments_to_analyze = self.thank_moments[:max_moments]
+        moments_to_use = self.thank_moments[:max_moments]
         
-        print(f"分析 {len(moments_to_analyze)} 个感谢时刻（共{len(self.thank_moments)}个）...")
-        print(f"推荐阈值: {self.config['multimodal_config']['recommend_threshold']}")
+        print(f"✅ 保留 {len(moments_to_use)} 个候选时刻（共{len(self.thank_moments)}个）")
+        print(f"💡 理念: 不进行AI预筛选，保留所有候选供人工标注")
+        print(f"   → 人工标注 + AI学习 = 更好的质量模型")
         
+        # 将thank_moments转换为统一格式
         analyzed_moments = []
+        for moment in moments_to_use:
+            analyzed_moments.append({
+                "start": moment.get("start", moment.get("time", 0)),
+                "end": moment.get("end", moment.get("start", moment.get("time", 0)) + 3),
+                "score": 1.0,  # 所有候选初始得分为1.0
+                "gesture_type": "thank",
+                "features": {"source": moment.get("keyword", "interval_sampling")}
+            })
         
-        for i, moment in enumerate(moments_to_analyze, 1):
-            print(f"\r处理中... {i}/{len(moments_to_analyze)}", end="", flush=True)
-            
-            try:
-                result = self.multimodal_detector.analyze_thank_moment(
-                    video_path=self.video_path,
-                    time=moment["time"],
-                    keyword=moment["keyword"]
-                )
-                
-                if result["recommended"]:
-                    analyzed_moments.append({
-                        "start": result["best_moment"]["start"],
-                        "end": result["best_moment"]["end"],
-                        "score": result["best_moment"]["score"],
-                        "gesture_type": "thank",
-                        "features": result["features"]
-                    })
-            
-            except Exception as e:
-                print(f"\n  ⚠ 处理失败: {e}")
-        
-        print(f"\n\n✓ 推荐 {len(analyzed_moments)} 个感谢表情")
-        
-        if len(analyzed_moments) > 0:
-            print("\n前5个推荐:")
-            for i, moment in enumerate(analyzed_moments[:5], 1):
-                print(f"  {i}. {moment['start']:.2f}s - {moment['end']:.2f}s, "
-                      f"得分: {moment['score']:.2f}")
-        else:
-            print("⚠ 未找到推荐的感谢表情，建议:")
-            print("  1. 进一步降低阈值（当前0.4）")
-            print("  2. 检查视频中感谢时刻是否有明显表情/手势")
+        print(f"\n✓ 已准备 {len(analyzed_moments)} 个表情包候选")
+        print(f"   - 关键词匹配: ~{len([m for m in self.thank_moments if 'keyword' in m])}个")
+        print(f"   - 固定间隔: ~{len([m for m in self.thank_moments if 'keyword' not in m])}个")
         
         self.thank_moments = analyzed_moments
     
@@ -485,6 +465,8 @@ def main():
     parser.add_argument('--output', type=str, help='输出目录')
     parser.add_argument('--max_emojis', type=int, default=20, help='最大表情包数量')
     parser.add_argument('--duration', type=int, help='分析时长（秒），不指定则分析全部')
+    parser.add_argument('--motion_threshold', type=float, help='运动检测阈值（默认0.03，越小越敏感）')
+    parser.add_argument('--recommend_threshold', type=float, help='推荐阈值（默认0.2，越小越宽松）')
     args = parser.parse_args()
     
     # 使用命令行参数覆盖配置
@@ -498,8 +480,15 @@ def main():
         # 如果没有指定duration，移除限制（分析全部）
         config["test_duration"] = None
     
-    config["max_dance_moments"] = args.max_emojis // 2
-    config["max_thank_moments"] = args.max_emojis
+    # ✅ 阈值参数覆盖
+    if args.motion_threshold is not None:
+        config["motion_config"]["motion_threshold"] = args.motion_threshold
+    if args.recommend_threshold is not None:
+        config["multimodal_config"]["recommend_threshold"] = args.recommend_threshold
+    
+    # ✅ 方案E: 不限制候选数量，生成尽可能多的候选供标注
+    config["max_dance_moments"] = min(args.max_emojis, 500)  # 最多500个dance
+    config["max_thank_moments"] = 999999  # 不限制thank数量，使用所有候选
     
     if not os.path.exists(config["video_path"]):
         print(f"错误: 视频文件不存在: {config['video_path']}")

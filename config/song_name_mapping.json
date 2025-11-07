@@ -1,0 +1,57 @@
+{
+  "song_name_mapping": {
+    "Love Confession": "告白气球",
+    "Simple Love": "简单爱",
+    "Waiting For You": "等你下课",
+    "Love you, no matter what": "不爱我就拉倒",
+    "Riding a White Horse": "骑白马",
+    "Confession Balloon": "告白气球",
+    "Pink Ocean": "粉色海洋",
+    "I Truly Believe": "我是如此相信",
+    "Can't Bear It": "不舍",
+    "Be Apart": "分开旅行",
+    "Girl don't cry": "女孩别哭",
+    "Girl": "女孩",
+    "Sailor": "水手",
+    "Silence": "沉默"
+  },
+  
+  "artist_name_mapping": {
+    "Jay Chou": "周杰伦",
+    "JJ Lin": "林俊杰",
+    "Eason Chan": "陈奕迅",
+    "Leehom Wang": "王力宏",
+    "David Tao": "陶喆",
+    "Silence Wang": "汪苏泷",
+    "Jackson Wang": "王嘉尔",
+    "Vae Xu": "许嵩",
+    "Chris Lee": "李宇春",
+    "Deserts Chang": "张悬",
+    "Pakho Chau": "周柏豪",
+    "Lala Hsu": "徐佳莹",
+    "WeiBird": "韦礼安",
+    "TIA RAY": "袁娅维",
+    "Zhihua Zheng": "郑智化",
+    "Zhang Yuan": "张远",
+    "Eric Chou": "周兴哲",
+    "A-Yue Chang": "张震岳",
+    "LuHan": "鹿晗",
+    "Bibi Zhou": "周笔畅",
+    "Li Ronghao": "李荣浩",
+    "Kelly Yu": "于文文"
+  },
+  
+  "cantonese_to_mandarin": {
+    "愛情轉移": "爱情转移",
+    "富士山下": "富士山下",
+    "夠鐘": "够钟",
+    "湊熱鬧": "凑热闹",
+    "雲裳羽衣曲": "云裳羽衣曲",
+    "寶貝": "宝贝",
+    "體面": "体面",
+    "可樂": "可乐",
+    "凍結": "冻结",
+    "指紋": "指纹"
+  }
+}
+

@@ -58,8 +58,8 @@ class MotionDetector:
             "roi_right": 0.8,              # ROI右边界
             "motion_threshold": 0.15,      # 运动强度阈值
             "merge_gap": 3.0,              # 合并间隔（秒）
-            "min_duration": 2.0,           # 最小持续时间（秒）
-            "max_duration": 10.0           # 最大持续时间（秒）
+            "min_duration": 8.0,           # 最小持续时间（秒）- 延长GIF时长
+            "max_duration": 15.0           # 最大持续时间（秒）
         }
         
         self.config = {**default_config, **(config or {})}
@@ -645,7 +645,7 @@ class MultimodalDetector:
             config: 配置参数字典
         """
         default_config = {
-            "time_window": 3.0,             # 前后时间窗口（秒）
+            "time_window": 8.0,             # 前后时间窗口（秒）- 延长GIF时长
             "emotion_weight": 0.3,          # 表情权重
             "gesture_weight": 0.4,          # 手势权重
             "effect_weight": 0.2,           # 特效权重

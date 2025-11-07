@@ -12,6 +12,8 @@
 - 网易云音乐
 - QQ音乐
 - 酷狗音乐
+- 酷我音乐
+- 咪咕音乐
 """
 
 import os
@@ -155,6 +157,217 @@ class LyricFetcher:
                 return base64.b64decode(data['lyric']).decode('utf-8')
         except Exception as e:
             print(f"  ⚠ 获取QQ歌词失败: {e}")
+        
+        return None
+    
+    def search_kugou(self, song_name: str) -> Optional[Dict]:
+        """
+        从酷狗音乐搜索歌曲
+        
+        Args:
+            song_name: 歌曲名
+            
+        Returns:
+            歌曲信息
+        """
+        try:
+            url = "http://mobilecdn.kugou.com/api/v3/search/song"
+            params = {
+                'format': 'json',
+                'keyword': song_name,
+                'page': '1',
+                'pagesize': '1'
+            }
+            
+            response = self.session.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if data.get('data') and data['data'].get('info'):
+                songs = data['data']['info']
+                if songs:
+                    song = songs[0]
+                    return {
+                        'hash': song.get('hash', ''),
+                        'album_id': song.get('album_id', ''),
+                        'name': song.get('songname', ''),
+                        'artist': song.get('singername', ''),
+                        'album': song.get('album_name', '')
+                    }
+        except Exception as e:
+            print(f"  ⚠ 酷狗音乐搜索失败: {e}")
+        
+        return None
+    
+    def get_kugou_lyric(self, song_hash: str, album_id: str) -> Optional[str]:
+        """
+        从酷狗音乐获取歌词
+        
+        Args:
+            song_hash: 歌曲hash
+            album_id: 专辑ID
+            
+        Returns:
+            LRC格式歌词
+        """
+        try:
+            url = "http://www.kugou.com/yy/index.php"
+            params = {
+                'r': 'play/getdata',
+                'hash': song_hash,
+                'album_id': album_id
+            }
+            
+            response = self.session.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if data.get('data') and data['data'].get('lyrics'):
+                import base64
+                lyrics_b64 = data['data']['lyrics']
+                return base64.b64decode(lyrics_b64).decode('utf-8')
+        except Exception as e:
+            print(f"  ⚠ 获取酷狗歌词失败: {e}")
+        
+        return None
+    
+    def search_kuwo(self, song_name: str) -> Optional[Dict]:
+        """
+        从酷我音乐搜索歌曲
+        
+        Args:
+            song_name: 歌曲名
+            
+        Returns:
+            歌曲信息
+        """
+        try:
+            url = "http://www.kuwo.cn/api/www/search/searchMusicBykeyWord"
+            params = {
+                'key': song_name,
+                'pn': '1',
+                'rn': '1'
+            }
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'http://www.kuwo.cn/'
+            }
+            
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
+            data = response.json()
+            
+            if data.get('data') and data['data'].get('list'):
+                songs = data['data']['list']
+                if songs:
+                    song = songs[0]
+                    return {
+                        'id': song.get('rid', ''),
+                        'name': song.get('name', ''),
+                        'artist': song.get('artist', ''),
+                        'album': song.get('album', '')
+                    }
+        except Exception as e:
+            print(f"  ⚠ 酷我音乐搜索失败: {e}")
+        
+        return None
+    
+    def get_kuwo_lyric(self, song_id: str) -> Optional[str]:
+        """
+        从酷我音乐获取歌词
+        
+        Args:
+            song_id: 歌曲ID
+            
+        Returns:
+            LRC格式歌词
+        """
+        try:
+            url = f"http://m.kuwo.cn/newh5/singles/songinfoandlrc"
+            params = {
+                'musicId': song_id
+            }
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
+                'Referer': 'http://m.kuwo.cn/'
+            }
+            
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
+            data = response.json()
+            
+            if data.get('data') and data['data'].get('lrclist'):
+                # 将酷我格式转换为LRC格式
+                lrc_list = data['data']['lrclist']
+                lrc_lines = []
+                for item in lrc_list:
+                    time_str = item.get('time', '')
+                    lyric = item.get('lineLyric', '')
+                    if time_str and lyric:
+                        lrc_lines.append(f"[{time_str}]{lyric}")
+                return '\n'.join(lrc_lines)
+        except Exception as e:
+            print(f"  ⚠ 获取酷我歌词失败: {e}")
+        
+        return None
+    
+    def search_migu(self, song_name: str) -> Optional[Dict]:
+        """
+        从咪咕音乐搜索歌曲
+        
+        Args:
+            song_name: 歌曲名
+            
+        Returns:
+            歌曲信息
+        """
+        try:
+            url = "https://m.music.migu.cn/migu/remoting/scr_search_tag"
+            params = {
+                'keyword': song_name,
+                'type': '2',  # 歌曲
+                'rows': '1',
+                'pgc': '1'
+            }
+            
+            response = self.session.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if data.get('musics'):
+                songs = data['musics']
+                if songs:
+                    song = songs[0]
+                    return {
+                        'id': song.get('id', ''),
+                        'copyrightId': song.get('copyrightId', ''),
+                        'name': song.get('title', ''),
+                        'artist': song.get('singerName', ''),
+                        'album': song.get('albumName', '')
+                    }
+        except Exception as e:
+            print(f"  ⚠ 咪咕音乐搜索失败: {e}")
+        
+        return None
+    
+    def get_migu_lyric(self, copyright_id: str) -> Optional[str]:
+        """
+        从咪咕音乐获取歌词
+        
+        Args:
+            copyright_id: 版权ID
+            
+        Returns:
+            LRC格式歌词
+        """
+        try:
+            url = f"https://music.migu.cn/v3/api/music/audioPlayer/getLyric"
+            params = {
+                'copyrightId': copyright_id
+            }
+            
+            response = self.session.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            if data.get('lyric'):
+                return data['lyric']
+        except Exception as e:
+            print(f"  ⚠ 获取咪咕歌词失败: {e}")
         
         return None
     
@@ -345,18 +558,53 @@ def main():
         # 尝试从网易云获取
         song_info = fetcher.search_netease(song_name)
         lyric_text = None
+        source = None
         
         if song_info:
-            print(f"  ✓ 找到: {song_info['name']} - {song_info['artist']}")
+            print(f"  ✓ [网易云] {song_info['name']} - {song_info['artist']}")
             lyric_text = fetcher.get_netease_lyric(song_info['id'])
+            if lyric_text:
+                source = "网易云"
         
         # 如果网易云失败，尝试QQ音乐
         if not lyric_text:
             print("  → 尝试QQ音乐...")
             song_info = fetcher.search_qq(song_name)
             if song_info:
-                print(f"  ✓ 找到: {song_info['name']} - {song_info['artist']}")
+                print(f"  ✓ [QQ音乐] {song_info['name']} - {song_info['artist']}")
                 lyric_text = fetcher.get_qq_lyric(song_info['id'])
+                if lyric_text:
+                    source = "QQ音乐"
+        
+        # 如果QQ音乐失败，尝试酷狗
+        if not lyric_text:
+            print("  → 尝试酷狗...")
+            song_info = fetcher.search_kugou(song_name)
+            if song_info:
+                print(f"  ✓ [酷狗] {song_info['name']} - {song_info['artist']}")
+                lyric_text = fetcher.get_kugou_lyric(song_info['hash'], song_info['album_id'])
+                if lyric_text:
+                    source = "酷狗"
+        
+        # 如果酷狗失败，尝试酷我
+        if not lyric_text:
+            print("  → 尝试酷我...")
+            song_info = fetcher.search_kuwo(song_name)
+            if song_info:
+                print(f"  ✓ [酷我] {song_info['name']} - {song_info['artist']}")
+                lyric_text = fetcher.get_kuwo_lyric(song_info['id'])
+                if lyric_text:
+                    source = "酷我"
+        
+        # 如果酷我失败，尝试咪咕
+        if not lyric_text:
+            print("  → 尝试咪咕...")
+            song_info = fetcher.search_migu(song_name)
+            if song_info:
+                print(f"  ✓ [咪咕] {song_info['name']} - {song_info['artist']}")
+                lyric_text = fetcher.get_migu_lyric(song_info['copyrightId'])
+                if lyric_text:
+                    source = "咪咕"
         
         # 处理歌词
         if lyric_text:
@@ -374,6 +622,7 @@ def main():
                     fetcher.lrc_to_srt(lrc_lines, srt_path)
                     fetcher.lrc_to_ass(lrc_lines, ass_path)
                     
+                    print(f"  ✓ 来源: {source}")
                     print(f"  ✓ 歌词行数: {len(lrc_lines)}")
                     print(f"  ✓ SRT: {os.path.basename(srt_path)}")
                     print(f"  ✓ ASS: {os.path.basename(ass_path)}")
