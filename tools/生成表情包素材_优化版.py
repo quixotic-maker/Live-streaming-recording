@@ -25,6 +25,58 @@ from emoji_generator import EmojiGenerator
 # from material_organizer import MaterialOrganizer
 
 
+# ✅ 并行生成单个表情包的独立函数
+def _generate_single_emoji(task: Dict) -> Dict:
+    """
+    在独立进程中生成单个表情包
+    
+    Args:
+        task: 包含所有必要参数的字典
+    
+    Returns:
+        生成结果字典
+    """
+    try:
+        # 导入所需模块（在子进程中需要重新导入）
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+        from emoji_generator import EmojiGenerator
+        
+        # 创建生成器实例
+        generator = EmojiGenerator()
+        
+        # 生成表情包
+        result = generator.generate_multi_specs(
+            video_path=task['video_path'],
+            start=task['start'],
+            end=task['end'],
+            output_dir=task['output_dir'],
+            base_name=task['base_name']
+        )
+        
+        return result
+        
+    except Exception as e:
+        # 返回None表示失败
+        return None
+
+
+def _get_memory_usage():
+    """获取当前内存使用情况（MB）"""
+    try:
+        import psutil
+        memory = psutil.virtual_memory()
+        return {
+            'total': memory.total / (1024**3),      # GB
+            'used': memory.used / (1024**3),        # GB
+            'available': memory.available / (1024**3),  # GB
+            'percent': memory.percent
+        }
+    except:
+        return None
+
+
 # 配置参数
 config = {
     "video_path": "/home/liu/videos/shanshan/抖音直播/观山/观山_2025-10-30.mp4",
@@ -115,36 +167,38 @@ class EmojiMaterialGenerator:
         print("\n[步骤1] 加载已有数据")
         print("-" * 70)
         
-        # ✅ 修复: 健壮的gift数据查找
+        # ✅ 修复: 健壮的gift数据查找 - 使用所有片段
         gift_data_loaded = self._find_gift_data_robust()
         
         if gift_data_loaded:
             segments = gift_data_loaded.get("segments", []) if isinstance(gift_data_loaded, dict) else gift_data_loaded
+            # ✅ 使用所有gift片段，不再限制只有"谢谢"的
             for item in segments:
-                if isinstance(item, dict) and "谢谢" in item.get("text", ""):
+                if isinstance(item, dict):
                     self.thank_moments.append({
                         "time": item["start"],
-                        "keyword": "谢谢",
-                        "text": item["text"]
+                        "keyword": "礼物/感谢",
+                        "text": item.get("text", "")
                     })
             
-            print(f"✓ 加载礼物感谢数据: {len(self.thank_moments)}个时刻")
+            print(f"✓ 加载礼物感谢数据: {len(self.thank_moments)}个时刻 (所有gift片段)")
         else:
             print(f"⚠ 未找到礼物数据，将仅依赖运动检测")
             self.thank_moments = []
         
-        # ✅ 新增：加载唱歌数据
+        # ✅ 新增：加载唱歌数据 - 使用所有片段
         singing_data = self._load_singing_data()
         if singing_data:
             segments = singing_data.get("segments", []) if isinstance(singing_data, dict) else singing_data
-            for item in segments[:20]:  # 每首歌取1-2个高潮片段
+            # ✅ 使用所有唱歌片段，不再限制前20个
+            for item in segments:
                 if isinstance(item, dict):
                     self.sing_moments.append({
                         "start": item.get("start", 0),
                         "end": item.get("end", item.get("start", 0) + 3),
                         "song": item.get("title", "unknown")
                     })
-            print(f"✓ 加载唱歌数据: {len(self.sing_moments)}个时刻")
+            print(f"✓ 加载唱歌数据: {len(self.sing_moments)}个时刻 (所有singing片段)")
         else:
             print(f"⚠ 未找到唱歌数据")
         
@@ -464,32 +518,135 @@ class EmojiMaterialGenerator:
         print(f"预计生成 {len(all_candidates) * 4} 个文件")
         print()
         
-        for i, candidate in enumerate(all_candidates, 1):
-            print(f"[{i}/{len(all_candidates)}] 生成表情包...", end="", flush=True)
-            
-            try:
-                emoji_type = candidate["type"]
-                base_name = f"emoji_{emoji_type}_{i:03d}"
-                
-                # ✅ 直接输出到output_dir根目录（不再创建子目录）
-                result = self.emoji_generator.generate_multi_specs(
-                    video_path=self.video_path,
-                    start=candidate["start"],
-                    end=candidate["end"],
-                    output_dir=str(output_path),  # 直接使用output_dir
-                    base_name=base_name
-                )
-                
-                result["gesture_type"] = candidate["gesture_type"]
-                result["category"] = emoji_type
-                self.all_emojis.append(result)
-                
-                print(f" ✓")
-                
-            except Exception as e:
-                print(f" ✗ 失败: {e}")
+        # ✅ 并行生成表情包
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        import os
         
-        print(f"\n✓ 表情包生成完成: {len(self.all_emojis)}个")
+        cpu_count = multiprocessing.cpu_count()
+        
+        # 检查是否手动指定并行度
+        if self.config.get('max_workers'):
+            max_workers = self.config['max_workers']
+            print(f"🚀 并行模式: 使用 {max_workers} 个进程 (手动指定, CPU: {cpu_count}核)")
+        else:
+            # ⚠️ 内存限制：每个进程约需4-6GB内存
+            # 64GB内存 → 最多8-10个进程安全
+            
+            # 优先考虑内存限制（假设可用内存50GB，每进程5GB）
+            memory_limited_workers = 10  # 保守估计
+            cpu_limited_workers = max(1, int(cpu_count * 0.5))  # 降低到50%
+            
+            max_workers = min(memory_limited_workers, cpu_limited_workers)
+            max_workers = max(1, min(max_workers, 6))  # 硬性上限：6个进程
+            
+            print(f"🚀 并行模式: 使用 {max_workers} 个进程 (自动检测, CPU: {cpu_count}核)")
+            print(f"⚠️  内存保护: 限制并发数以避免OOM (建议: 2-6个进程)")
+        
+        print()
+        
+        # 准备任务（支持断点续传）
+        tasks = []
+        skipped_count = 0
+        
+        for i, candidate in enumerate(all_candidates, 1):
+            emoji_type = candidate["type"]
+            base_name = f"emoji_{emoji_type}_{i:03d}"
+            
+            # ✅ 断点续传：检查元数据文件是否已存在
+            metadata_file = output_path / f"{base_name}_metadata.json"
+            if metadata_file.exists():
+                skipped_count += 1
+                # 读取已有的元数据，添加到all_emojis
+                try:
+                    import json
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        existing_result = json.load(f)
+                        existing_result["gesture_type"] = candidate["gesture_type"]
+                        existing_result["category"] = emoji_type
+                        self.all_emojis.append(existing_result)
+                except Exception as e:
+                    print(f"⚠️  读取已有元数据失败: {base_name}, {e}")
+                continue  # 跳过已生成的
+            
+            task = {
+                'index': i,
+                'total': len(all_candidates),
+                'video_path': self.video_path,
+                'start': candidate["start"],
+                'end': candidate["end"],
+                'output_dir': str(output_path),
+                'base_name': base_name,
+                'emoji_type': emoji_type,
+                'gesture_type': candidate["gesture_type"]
+            }
+            tasks.append(task)
+        
+        if skipped_count > 0:
+            print(f"✓ 断点续传: 跳过 {skipped_count} 个已生成的表情包")
+            print(f"✓ 剩余任务: {len(tasks)} 个\n")
+        
+        # ✅ 如果所有任务都已完成，直接返回
+        if len(tasks) == 0:
+            print("✅ 所有表情包已生成完成，无需继续处理")
+            print(f"📦 总计: {len(self.all_emojis)} 个表情包\n")
+            return
+        
+        # 并行执行（带实时内存监控）
+        success_count = 0
+        fail_count = 0
+        
+        # 初始内存状态
+        mem_start = _get_memory_usage()
+        if mem_start:
+            print(f"📊 初始内存: {mem_start['used']:.1f}GB / {mem_start['total']:.1f}GB ({mem_start['percent']:.1f}%)")
+            print()
+        
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # 提交所有任务
+            futures = {executor.submit(_generate_single_emoji, task): task for task in tasks}
+            
+            # 收集结果（按完成顺序）
+            last_mem_check = 0
+            for i, future in enumerate(as_completed(futures), 1):
+                task = futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        result["gesture_type"] = task["gesture_type"]
+                        result["category"] = task["emoji_type"]
+                        self.all_emojis.append(result)
+                        
+                        # 每10个任务检查一次内存
+                        if i % 10 == 0:
+                            mem = _get_memory_usage()
+                            if mem:
+                                mem_delta = mem['used'] - (mem_start['used'] if mem_start else 0)
+                                status = "🟢" if mem['percent'] < 80 else "🟡" if mem['percent'] < 90 else "🔴"
+                                print(f"[{task['index']}/{task['total']}] ✓ {task['base_name']} {status} {mem['percent']:.1f}% (+{mem_delta:.1f}GB)")
+                            else:
+                                print(f"[{task['index']}/{task['total']}] ✓ {task['base_name']}")
+                        else:
+                            print(f"[{task['index']}/{task['total']}] ✓ {task['base_name']}")
+                        
+                        success_count += 1
+                    else:
+                        print(f"[{task['index']}/{task['total']}] ✗ {task['base_name']} (生成失败)")
+                        fail_count += 1
+                except Exception as e:
+                    print(f"[{task['index']}/{task['total']}] ✗ {task['base_name']} (错误: {e})")
+                    fail_count += 1
+        
+        # 最终内存状态
+        mem_end = _get_memory_usage()
+        print()
+        if mem_end and mem_start:
+            mem_delta = mem_end['used'] - mem_start['used']
+            print(f"📊 最终内存: {mem_end['used']:.1f}GB / {mem_end['total']:.1f}GB ({mem_end['percent']:.1f}%)")
+            print(f"   内存增量: +{mem_delta:.1f}GB")
+        
+        print()
+        print(f"✓ 表情包生成完成: {success_count} 个成功, {fail_count} 个失败")
         print(f"   输出目录: {output_path}")
     
     def organize_emojis(self):
@@ -646,6 +803,7 @@ def main():
     parser.add_argument('--duration', type=int, help='分析时长（秒），不指定则分析全部')
     parser.add_argument('--motion_threshold', type=float, help='运动检测阈值（默认0.03，越小越敏感）')
     parser.add_argument('--recommend_threshold', type=float, help='推荐阈值（默认0.2，越小越宽松）')
+    parser.add_argument('--max_workers', type=int, help='并行进程数（默认自动检测，建议2-6）')
     args = parser.parse_args()
     
     # 使用命令行参数覆盖配置
@@ -665,9 +823,16 @@ def main():
     if args.recommend_threshold is not None:
         config["multimodal_config"]["recommend_threshold"] = args.recommend_threshold
     
+    # ✅ 并行度参数覆盖
+    if args.max_workers is not None:
+        config["max_workers"] = args.max_workers
+    
     # ✅ 方案E: 不限制候选数量，生成尽可能多的候选供标注
-    config["max_dance_moments"] = min(args.max_emojis, 500)  # 最多500个dance
-    config["max_thank_moments"] = 999999  # 不限制thank数量，使用所有候选
+    config["max_dance_moments"] = 999999  # 不限制cute/dance数量
+    config["max_thank_moments"] = 999999  # 不限制thank数量
+    config["max_sing_moments"] = 999999   # 不限制sing数量
+    config["max_chat_moments"] = 999999   # 不限制chat数量
+    config["max_upgrade_moments"] = 999999  # 不限制upgrade数量
     
     if not os.path.exists(config["video_path"]):
         print(f"错误: 视频文件不存在: {config['video_path']}")
