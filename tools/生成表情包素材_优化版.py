@@ -114,6 +114,7 @@ class EmojiMaterialGenerator:
         self.video_path = config["video_path"]
         self.output_dir = config["output_dir"]
         self.temp_dir = config.get("temp_dir", "temp_emojis")
+        self.fingerprint = config.get("fingerprint")
         
         if not os.path.exists(self.video_path):
             raise FileNotFoundError(f"视频文件不存在: {self.video_path}")
@@ -161,6 +162,22 @@ class EmojiMaterialGenerator:
         # 无需创建复杂的"站"结构，只创建实际需要的
         # 表情包会直接保存在output_dir下
         print("✅ 使用简化目录结构（无MaterialOrganizer）")
+    
+    def _write_completion_marker(self, output_path: Path):
+        """写入完成标记，便于上层跳过逻辑"""
+        if not self.fingerprint:
+            return
+        try:
+            output_path.mkdir(parents=True, exist_ok=True)
+            # 清理旧的完成标记
+            for marker in output_path.glob(".emoji_done_*"):
+                if marker.is_file():
+                    marker.unlink()
+            marker_file = output_path / f".emoji_done_{self.fingerprint}"
+            marker_file.write_text(f"done {datetime.now().isoformat()}", encoding="utf-8")
+            print(f"✓ 写入完成标记: {marker_file.name}")
+        except Exception as e:
+            print(f"⚠️ 写入完成标记失败: {e}")
     
     def load_data(self):
         """加载已有数据"""
@@ -588,6 +605,7 @@ class EmojiMaterialGenerator:
         
         # ✅ 如果所有任务都已完成，直接返回
         if len(tasks) == 0:
+            self._write_completion_marker(output_path)
             print("✅ 所有表情包已生成完成，无需继续处理")
             print(f"📦 总计: {len(self.all_emojis)} 个表情包\n")
             return
@@ -648,6 +666,7 @@ class EmojiMaterialGenerator:
         print()
         print(f"✓ 表情包生成完成: {success_count} 个成功, {fail_count} 个失败")
         print(f"   输出目录: {output_path}")
+        self._write_completion_marker(output_path)
     
     def organize_emojis(self):
         """分类存储表情包（已禁用 - 使用简化结构）"""
@@ -804,6 +823,7 @@ def main():
     parser.add_argument('--motion_threshold', type=float, help='运动检测阈值（默认0.03，越小越敏感）')
     parser.add_argument('--recommend_threshold', type=float, help='推荐阈值（默认0.2，越小越宽松）')
     parser.add_argument('--max_workers', type=int, help='并行进程数（默认自动检测，建议2-6）')
+    parser.add_argument('--fingerprint', type=str, help='输入数据指纹（用于完成标记）')
     args = parser.parse_args()
     
     # 使用命令行参数覆盖配置
@@ -826,6 +846,8 @@ def main():
     # ✅ 并行度参数覆盖
     if args.max_workers is not None:
         config["max_workers"] = args.max_workers
+    if args.fingerprint:
+        config["fingerprint"] = args.fingerprint
     
     # ✅ 方案E: 不限制候选数量，生成尽可能多的候选供标注
     config["max_dance_moments"] = 999999  # 不限制cute/dance数量

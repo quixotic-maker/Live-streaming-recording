@@ -170,8 +170,29 @@ class SongVideoExtractor:
             是否成功
         """
         try:
-            cmd = [
+            base_args = [
                 'ffmpeg',
+                '-hide_banner',
+                '-loglevel', 'warning',
+                '-fflags', '+genpts+discardcorrupt',
+                '-err_detect', 'ignore_err',
+                '-analyzeduration', '100M',
+                '-probesize', '100M'
+            ]
+            
+            def run_ffmpeg(cmd):
+                return subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=600,
+                    text=True
+                )
+            
+            # 尝试1：快速seek + 容错参数
+            cmd_fast = [
+                *base_args,
+                '-noaccurate_seek',
                 '-ss', str(start),
                 '-i', self.video_path,
                 '-t', str(duration),
@@ -180,20 +201,59 @@ class SongVideoExtractor:
                 '-crf', '23',
                 '-c:a', 'aac',
                 '-b:a', '192k',
+                '-movflags', '+faststart',
                 '-y',
                 output_path
             ]
             
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=600
-            )
-            
+            result = run_ffmpeg(cmd_fast)
             success = result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0
             
-            return success
+            if success:
+                return True
+            
+            if result.stderr:
+                print(f"  ⚠ FFmpeg警告: {result.stderr.strip().splitlines()[-1]}")
+            print("  ⚠ 首次提取失败，尝试精确seek方案...")
+            
+            # 移除失败输出
+            try:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+            except OSError:
+                pass
+            
+            # 尝试2：慢速精确seek，增加缓冲并向前预留0.5秒
+            safe_start = max(0, start - 0.5)
+            safe_duration = duration + 1.0
+            cmd_precise = [
+                *base_args,
+                '-i', self.video_path,
+                '-ss', f"{safe_start}",
+                '-t', f"{safe_duration}",
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-movflags', '+faststart',
+                '-y',
+                output_path
+            ]
+            
+            result_precise = run_ffmpeg(cmd_precise)
+            success_precise = (
+                result_precise.returncode == 0 and
+                os.path.exists(output_path) and os.path.getsize(output_path) > 0
+            )
+            
+            if success_precise:
+                print("  ✓ 精确seek方案成功")
+                return True
+            
+            if result_precise.stderr:
+                print(f"  ✗ 精确seek失败: {result_precise.stderr.strip().splitlines()[-1]}")
+            return False
             
         except Exception as e:
             print(f"  错误: {e}")
